@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TeacherRole{
+  Teacher
+  Admin
+  Owner
+
+}
+
+model Teacher {
+  id            Int      @id @default(autoincrement())
+  name          String?
+  email         String?  @unique
+  password      String?
+  subject       String?
+  qualification String?
+  imageUrl      String?
+  imagePublicId String?
+  role          TeacherRole @default(Teacher)
+  isPrincipal   Boolean? @default(false)
+  bio           String?
+  otp           String?
+  otpExpiry     DateTime?
+  isVerified    Boolean? @default(false)
+  createdAt     DateTime @default(now())
+}
+
+enum MediaType {
+  photo
+  video
+}
+
+model Media {
+  id            String    @id @default(uuid()) @db.Uuid
+  title         String    @db.VarChar(200)
+  bio           String?   @db.Text
+  type          MediaType
+  url           String    @db.Text
+  thumbnailUrl  String?   @map("thumbnail_url") @db.Text 
+  createdAt     DateTime  @default(now()) @db.Timestamp(6) @map("created_at")
+
+}
+
+model HeroSlider {
+  id              Int      @id @default(autoincrement())
+  backgroundImage String
+  tagline         String?
+  titlePart1      String?
+  titlePart2      String?
+  description     String?  @db.Text
+  btn1Label       String?
+  btn1Url         String?
+  btn2Label       String?
+  btn2Url         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SchoolStat {
+  id        Int      @id @default(autoincrement())
+  iconName  String?
+  statValue String
+  statLabel String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notice {
+  id              Int      @id @default(autoincrement())
+  type            String   // "Urgent", "Academic", "Careers"
+  title           String
+  description     String   @db.Text
+  documentUrl       String
+  documentPublicId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PYQ {
+  id        Int      @id @default(autoincrement())
+  className     String?   // E.g., "12", "11"
+  subject   String?   // E.g., "Physics", "Chemistry"
+  year      String?   // E.g., "2025", "2024"
+  term      String?   // E.g., "Board Exam", "Final Term"
+  fileUrl   String?   // Cloudinary ka secure PDF URL yahan save hoga
+  filePublicId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pyqs")
+}
