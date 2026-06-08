@@ -118,3 +118,36 @@ model PYQ {
 
   @@map("pyqs")
 }
+
+enum AdmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Admission {
+  id          String   @id
+  studentName String
+  FatherName  String
+  MotherName  String
+  dob         DateTime
+  targetClass String
+  address     String   @db.Text
+  phoneNumber String
+  email       String
+  year        String
+  status      AdmissionStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("admissions")
+}
+
+model AdmissionSetting {
+  id          String   @id @default(uuid())
+  isOpen      Boolean  @default(false)
+  activeYear  String   @unique
+  updatedAt   DateTime @updatedAt
+
+  @@map("admission_settings")
+}

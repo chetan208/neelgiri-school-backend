@@ -50,6 +50,9 @@ notification section
 
 
 
+// changes that i have to be done 
+1 in the profile section there is only the fileld showing that i allready in database all fields should show
+
 
 
 

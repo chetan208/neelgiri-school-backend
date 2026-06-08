@@ -4,6 +4,7 @@ import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
 import { 
+  admissionsRoutes,
   authRoutes,
   herostatsRoutes,
   noticesRoutes,
@@ -43,6 +44,8 @@ app.use('/api/school-stats', herostatsRoutes);
 app.use('/api/notices', noticesRoutes);
 app.use('/api/auth',authRoutes);
 app.use('/api/pyqs', PYQsRoute);
+
+app.use('/api/admissions', admissionsRoutes);
 
 const PORT = process.env.PORT;
 

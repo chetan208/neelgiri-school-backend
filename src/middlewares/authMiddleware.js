@@ -38,4 +38,23 @@ const checkAdminMiddleware = (req, res, next) => {
     }
 }
 
-export {checkAuthMiddleware, checkAdminMiddleware}
+const checkOwnerMiddleware = (req, res, next) => {
+    try {
+        const token = req.cookies.token;
+        if(!token){
+            return res.status(401).json({message: "Unauthorized"});
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if(decoded.role !== "Owner"){
+            return res.status(403).json({message: "Forbidden"});
+        }
+        req.user = decoded;
+        next();
+        
+    } catch (error) {
+        console.log("error in owner middleware",error);
+        res.status(401).json({message: "Unauthorized"});
+    }
+}
+
+export {checkAuthMiddleware, checkAdminMiddleware, checkOwnerMiddleware}
