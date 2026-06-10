@@ -7,6 +7,7 @@ import {
   admissionsRoutes,
   authRoutes,
   herostatsRoutes,
+  mediaRoutes,
   noticesRoutes,
   PYQsRoute,
   teacherRoutes 
@@ -46,6 +47,7 @@ app.use('/api/auth',authRoutes);
 app.use('/api/pyqs', PYQsRoute);
 
 app.use('/api/admissions', admissionsRoutes);
+app.use('/api/media', mediaRoutes);
 
 const PORT = process.env.PORT;
 

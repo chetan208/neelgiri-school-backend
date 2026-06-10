@@ -4,6 +4,7 @@ import noticesRoutes from './noticesRoutes.js';
 import authRoutes from './authRoutes.js'
 import PYQsRoute from './PYQsRoute.js';
 import admissionsRoutes from './admissionsRoutes.js';
+import mediaRoutes from './mediaRoutes.js';
 
 export { 
     teacherRoutes, 
@@ -11,6 +12,8 @@ export {
     noticesRoutes,
     authRoutes,
     PYQsRoute,
-    admissionsRoutes
+    admissionsRoutes,
+    mediaRoutes
+
 };
 

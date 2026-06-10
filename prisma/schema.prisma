@@ -37,21 +37,7 @@ model Teacher {
   createdAt     DateTime @default(now())
 }
 
-enum MediaType {
-  photo
-  video
-}
 
-model Media {
-  id            String    @id @default(uuid()) @db.Uuid
-  title         String    @db.VarChar(200)
-  bio           String?   @db.Text
-  type          MediaType
-  url           String    @db.Text
-  thumbnailUrl  String?   @map("thumbnail_url") @db.Text 
-  createdAt     DateTime  @default(now()) @db.Timestamp(6) @map("created_at")
-
-}
 
 model HeroSlider {
   id              Int      @id @default(autoincrement())
@@ -150,4 +136,33 @@ model AdmissionSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("admission_settings")
+}
+
+enum mediaType{
+  video
+  image
+}
+
+model MediaGallery {
+  id         String   @id @default(uuid())
+  title      String?
+  mediaType  mediaType 
+  url        String
+  publicId   String?  
+  
+  // Relation Fields
+  categoryId String  
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([createdAt]) 
+}
+
+model Category {
+  id        String          @id @default(uuid()) 
+  name      String          @unique 
+  media     MediaGallery[]  
+  createdAt DateTime        @default(now())
 }
