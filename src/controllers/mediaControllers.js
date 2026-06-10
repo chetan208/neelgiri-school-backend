@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.ts";
 import cloudinary from "../../config/cloudinaryImage.js";
+import { NullTypes } from "@prisma/client/runtime/client";
 
 const uploadMedia = async (req, res) => {
   const { title, mediaType, category ,url} = req.body;
@@ -79,30 +80,70 @@ const uploadMedia = async (req, res) => {
 };
 
 const deleteMedia = async (req, res) => {
-    const {publicIds} = req.body;
-    if (!publicIds || !Array.isArray(publicIds) || publicIds.length === 0) {
+    const {ids} = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: "No media IDs provided for deletion." });
     }
 
     try {
-        // Delete media from Cloudinary
-        for (const publicId of publicIds) {
-            await cloudinary.uploader.destroy(publicId);
-        }
-        // Delete media records from the database
-        await prisma.mediaGallery.deleteMany({
+        // agr delete krne k baad media nhi bchti hai to automatically category delete kr dena chahiye
+        const mediaToDelete = await prisma.mediaGallery.findMany({
             where: {
-                publicId: {
-                    in: publicIds,
+                id: {
+                    in: ids,
                 },
             },
-        }); 
+        });
+
+        // check if media is image and delete from cloudinary
+        for (const media of mediaToDelete) {
+            if (media.mediaType === "image" && media.publicId) {
+                await cloudinary.uploader.destroy(media.publicId);
+                
+                await prisma.mediaGallery.delete({
+                    where: {
+                        id: media.id,
+                    },
+                });
+
+
+            }
+
+            if (media.mediaType === "video") {
+                await prisma.mediaGallery.delete({
+                    where: {
+                        id: media.id,
+                    },
+                });
+            }
+        }
+        
+        // check if category has any media left, if not delete the category
+        const categoryIds = [...new Set(mediaToDelete.map(media => media.categoryId))];
+        for (const categoryId of categoryIds) {
+            const mediaCount = await prisma.mediaGallery.count({
+                where: {
+                    categoryId,
+                },
+            });
+            if (mediaCount === 0) {
+                await prisma.category.delete({
+                    where: {
+                        id: categoryId,
+                    },
+                });
+            }
+        }
+
         return res.status(200).json({ message: "Media deleted successfully." });
+
     } catch (error) {
         console.error("Error deleting media:", error);
         return res.status(500).json({ error: "An error occurred while deleting the media." });
     }
-}
+    }
+
 
 const getMediaByPage = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;

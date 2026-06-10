@@ -148,7 +148,7 @@ model MediaGallery {
   title      String?
   mediaType  mediaType 
   url        String
-  publicId   String?  
+  publicId   String?  @unique
   
   // Relation Fields
   categoryId String  
