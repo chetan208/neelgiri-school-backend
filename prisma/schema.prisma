@@ -35,6 +35,7 @@ model Teacher {
   otpExpiry     DateTime?
   isVerified    Boolean? @default(false)
   createdAt     DateTime @default(now())
+  phoneNumber      String?
 }
 
 
@@ -165,4 +166,12 @@ model Category {
   name      String          @unique 
   media     MediaGallery[]  
   createdAt DateTime        @default(now())
+}
+
+model contactUs{
+  id        String          @id @default(uuid()) 
+  name      String          
+  phoneNumber    String
+  email     String
+  message   String  @db.Text
 }

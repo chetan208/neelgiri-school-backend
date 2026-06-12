@@ -192,8 +192,12 @@ const logout = async(req,res)=>{
 
 
 
+
+
+
 export { TeacherLogin, 
     forgotPassword, 
     resetPassword , 
     getmydetails,
-    logout};
+    logout,
+};

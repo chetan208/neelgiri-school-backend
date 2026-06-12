@@ -30,7 +30,7 @@ const TeacherSingup = async (req, res) => {
             })
         }
 
-        if(existingTeacher.isVerified){
+        if(existingTeacher.password){
             return res.status(400).json({
                 message: "you are already registered and verified as a teacher please login"
             })
@@ -65,7 +65,7 @@ const TeacherSingup = async (req, res) => {
 }
 
 const addTeacher = async (req, res) => {
-    const {name,email} = req.body;
+    const {name, email, subject, phoneNumber} = req.body;
 
     try {
         if(!name || !email){
@@ -83,7 +83,10 @@ const addTeacher = async (req, res) => {
         const newTeacher = await prisma.teacher.create({
             data: {
                 name,
-                email
+                email,
+                subject,
+                phoneNumber,
+                isVerified: true
             }
         });
 
@@ -246,7 +249,8 @@ const getTeachers = async (req, res) => {
                 bio: true,
                 imageUrl: true,
                 role:true,
-                isPrincipal:true
+                isPrincipal:true,
+                phoneNumber: true
             }
         });
         res.status(200).json({teachers});
@@ -258,12 +262,59 @@ const getTeachers = async (req, res) => {
     }
 }
 
+const deleteTeacher = async (req, res) => {
+    const { email } = req.params;
+    try {
+        const teacher = await prisma.teacher.findUnique({
+            where: { email }
+        });
+        if (!teacher) {
+            return res.status(404).json({ message: "Teacher not found" });
+        }
+        await prisma.teacher.delete({
+            where: { email }
+        });
+        res.status(200).json({ message: "Teacher deleted successfully" });
+    } catch (error) {
+        console.log("error in deleting teacher", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
+const updateTeacherRole = async (req, res) => {
+    const { email, role } = req.body;
+    try {
+        if (!email || !role) {
+            return res.status(400).json({ message: "Email and Role are required" });
+        }
+        if (role !== "Teacher" && role !== "Admin" && role !== "Owner") {
+            return res.status(400).json({ message: "Invalid role value" });
+        }
+        const teacher = await prisma.teacher.findUnique({
+            where: { email }
+        });
+        if (!teacher) {
+            return res.status(404).json({ message: "Teacher not found" });
+        }
+        const updatedTeacher = await prisma.teacher.update({
+            where: { email },
+            data: { role }
+        });
+        res.status(200).json({ message: "Teacher role updated successfully", teacher: updatedTeacher });
+    } catch (error) {
+        console.log("error in updating teacher role", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+}
+
 export {
     TeacherSingup, 
     addTeacher, 
     varifyOtp, 
     completeProfile,
     getmyProfile,
-    getTeachers
+    getTeachers,
+    deleteTeacher,
+    updateTeacherRole
 };
 

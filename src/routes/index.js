@@ -5,6 +5,7 @@ import authRoutes from './authRoutes.js'
 import PYQsRoute from './PYQsRoute.js';
 import admissionsRoutes from './admissionsRoutes.js';
 import mediaRoutes from './mediaRoutes.js';
+import contactRoutes from './contactRoute.js';
 
 export { 
     teacherRoutes, 
@@ -13,7 +14,8 @@ export {
     authRoutes,
     PYQsRoute,
     admissionsRoutes,
-    mediaRoutes
+    mediaRoutes,
+    contactRoutes
 
 };
 

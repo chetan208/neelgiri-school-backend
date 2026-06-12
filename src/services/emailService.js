@@ -36,4 +36,35 @@ async function sendOtpEmail(toEmail, otp) {
   }
 }
 
-export { sendOtpEmail };
+async function sendContectUsEmail(sender,phoneNumber,email,message){
+ try {
+    const { data, error } = await resend.emails.send({
+      from: 'Contact Us<no-reply@neelgiripublicschool.in>', 
+      to: 'chetanchoudhary435@gmail.com',
+      subject: `New Contact Us Message from ${sender}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px; color: #333;">
+          <h2>New Contact Us Message</h2>
+          <p><strong>From:</strong> ${sender}</p>
+          <p><strong>Phone Number:</strong> ${phoneNumber}</p>
+          <p><strong>Email:</strong> ${email}</p> 
+          <p><strong>Message:</strong></p>
+          <p>${message}</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Resend API Error:', error);
+      throw new Error(error.message || 'Failed to send Contact Us email.');
+    }
+
+    return data;
+ } catch (error) {
+   return error
+  
+ }
+}
+
+
+export { sendOtpEmail, sendContectUsEmail };

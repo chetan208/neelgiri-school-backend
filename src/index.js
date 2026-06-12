@@ -6,6 +6,7 @@ import cors from 'cors';
 import { 
   admissionsRoutes,
   authRoutes,
+  contactRoutes,
   herostatsRoutes,
   mediaRoutes,
   noticesRoutes,
@@ -48,7 +49,7 @@ app.use('/api/pyqs', PYQsRoute);
 
 app.use('/api/admissions', admissionsRoutes);
 app.use('/api/media', mediaRoutes);
-
+app.use('/api/contact', contactRoutes);
 const PORT = process.env.PORT;
 
 app.listen(PORT, () => {
