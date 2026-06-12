@@ -156,7 +156,10 @@ const getMediaByPage = async (req, res) => {
             include: {
                 category: true,
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: [
+                { order: 'asc' },
+                { createdAt: 'desc' }
+            ],
         });
         const totalItems = await prisma.mediaGallery.count();
         const totalPages = Math.ceil(totalItems / limit);
@@ -178,4 +181,28 @@ const getCategories = async (req, res) => {
     }
 }   
 
-export { uploadMedia, deleteMedia, getMediaByPage, getCategories };
+const reorderMedia = async (req, res) => {
+    const { orders } = req.body;
+
+    if (!orders || !Array.isArray(orders)) {
+        return res.status(400).json({ error: "Reorder data (orders array) is required." });
+    }
+
+    try {
+        await Promise.all(
+            orders.map((item) =>
+                prisma.mediaGallery.update({
+                    where: { id: item.id },
+                    data: { order: parseInt(item.order) },
+                })
+            )
+        );
+
+        return res.status(200).json({ message: "Media items reordered successfully." });
+    } catch (error) {
+        console.error("Error reordering media:", error);
+        return res.status(500).json({ error: "An error occurred while reordering the media." });
+    }
+}
+
+export { uploadMedia, deleteMedia, getMediaByPage, getCategories, reorderMedia };

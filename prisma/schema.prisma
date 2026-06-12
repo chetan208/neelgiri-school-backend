@@ -150,6 +150,7 @@ model MediaGallery {
   mediaType  mediaType 
   url        String
   publicId   String?  @unique
+  order      Int      @default(0)
   
   // Relation Fields
   categoryId String  
