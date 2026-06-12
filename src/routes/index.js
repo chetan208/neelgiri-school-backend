@@ -6,6 +6,8 @@ import PYQsRoute from './PYQsRoute.js';
 import admissionsRoutes from './admissionsRoutes.js';
 import mediaRoutes from './mediaRoutes.js';
 import contactRoutes from './contactRoute.js';
+import calendarRoutes from './calendarRoutes.js';
+import topResultsRoutes from './topResultsRoutes.js';
 
 export { 
     teacherRoutes, 
@@ -15,7 +17,8 @@ export {
     PYQsRoute,
     admissionsRoutes,
     mediaRoutes,
-    contactRoutes
-
+    contactRoutes,
+    calendarRoutes,
+    topResultsRoutes
 };
 

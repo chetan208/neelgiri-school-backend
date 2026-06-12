@@ -24,6 +24,18 @@ const openAdmissions = async (req, res) => {
                 where: { id: existingAdmission.id },
                 data: { isOpen: true }
             });
+
+            // Auto-generate notice
+            await prisma.notice.create({
+                data: {
+                    type: "Academic",
+                    title: `Admissions Open for Session ${year}`,
+                    description: `We are pleased to announce that online admissions for the academic session ${year} at Neelgiri Public Sen. Sec. School are now open! Parents and prospective students can submit their registration applications online.`,
+                    documentUrl: "custom:admissions",
+                    documentPublicId: "admissions-auto"
+                }
+            });
+
             return res.status(200).json({ message: `Admission opened successfully for year ${year}` });
         }
 
@@ -33,6 +45,18 @@ const openAdmissions = async (req, res) => {
                 isOpen: true
             }
         });
+
+        // Auto-generate notice
+        await prisma.notice.create({
+            data: {
+                type: "Academic",
+                title: `Admissions Open for Session ${year}`,
+                description: `We are pleased to announce that online admissions for the academic session ${year} at Neelgiri Public Sen. Sec. School are now open! Parents and prospective students can submit their registration applications online.`,
+                documentUrl: "custom:admissions",
+                documentPublicId: "admissions-auto"
+            }
+        });
+
         return res.status(201).json({ message: "Admission opened successfully", admission: newAdmission });
     } catch (error) {
         console.log("error in open admissions", error);
@@ -59,6 +83,18 @@ const closeAdmissions = async (req, res) => {
             where: { id: existingAdmission.id },
             data: { isOpen: false }
         });
+
+        // Auto-generate notice
+        await prisma.notice.create({
+            data: {
+                type: "Academic",
+                title: `Admissions Closed for Session ${year}`,
+                description: `Please note that online admissions for the academic session ${year} at Neelgiri Public Sen. Sec. School are now officially closed. We thank all applicants for their interest and submissions.`,
+                documentUrl: "#",
+                documentPublicId: "admissions-auto"
+            }
+        });
+
         return res.status(200).json({ message: `Admission closed successfully for year ${year}` });
     } catch (error) {
         console.log("error in close admissions", error);

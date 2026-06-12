@@ -11,8 +11,9 @@ import {
   mediaRoutes,
   noticesRoutes,
   PYQsRoute,
-  teacherRoutes 
-  
+  teacherRoutes,
+  calendarRoutes,
+  topResultsRoutes
   } from './routes/index.js';
 
 
@@ -50,6 +51,8 @@ app.use('/api/pyqs', PYQsRoute);
 app.use('/api/admissions', admissionsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/top-results', topResultsRoutes);
 const PORT = process.env.PORT;
 
 app.listen(PORT, () => {

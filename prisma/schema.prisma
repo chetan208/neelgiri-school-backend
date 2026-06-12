@@ -176,3 +176,30 @@ model contactUs{
   email     String
   message   String  @db.Text
 }
+
+model CalendarEvent {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  date        DateTime
+  endDate     DateTime?
+  type        String    @default("holiday") // "holiday", "exam", "event", "other"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("calendar_events")
+}
+
+model TopResult {
+  id            String   @id @default(uuid())
+  studentName   String
+  className     String
+  marks         String
+  parentsName   String
+  imageUrl      String?
+  imagePublicId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("top_results")
+}
