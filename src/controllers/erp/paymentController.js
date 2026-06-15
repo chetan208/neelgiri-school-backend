@@ -14,8 +14,8 @@ const makePayment = async (req, res) => {
     }
 
     let remainingPayment = parseFloat(amountPaid);
-    if (remainingPayment <= 0) {
-      return res.status(400).json({ success: false, message: "Payment amount must be greater than 0" });
+    if (isNaN(remainingPayment) || remainingPayment <= 0) {
+      return res.status(400).json({ success: false, message: "Payment amount must be a valid number greater than 0" });
     }
 
     // 2. Student ke saare unpaid/partially paid records nikalna (Oldest First)
@@ -47,7 +47,7 @@ const makePayment = async (req, res) => {
       for (let feeRecord of unpaidRecords) {
         if (remainingPayment <= 0) break; // Agar paisa khatam ho gaya toh loop rok do
 
-        const totalDemand = parseFloat(feeRecord.total);
+        const totalDemand = parseFloat(feeRecord.total) || 0;
         
         const previousPayments = await tx.payment.aggregate({
           where: { feeStructureId: feeRecord.id },
@@ -55,47 +55,57 @@ const makePayment = async (req, res) => {
         });
         
         const totalAlreadyPaid = parseFloat(previousPayments._sum.amountPaid || 0);
-        const actualDueForThisMonth = totalDemand - totalAlreadyPaid;
+        let actualDueForThisMonth = Math.round((totalDemand - totalAlreadyPaid) * 100) / 100;
+
+        if (actualDueForThisMonth <= 0) {
+          // Money Printer Exploit fix: If already overpaid or fully paid, mark as PAID and skip allocation
+          await tx.feeStructure.update({
+            where: { id: feeRecord.id },
+            data: { status: "PAID" }
+          });
+          continue;
+        }
 
         let amountToAllocate = 0;
         let newStatus = "PENDING";
 
         if (remainingPayment >= actualDueForThisMonth) {
           amountToAllocate = actualDueForThisMonth;
-          remainingPayment -= actualDueForThisMonth;
+          remainingPayment = Math.round((remainingPayment - actualDueForThisMonth) * 100) / 100;
           newStatus = "PAID";
         } else {
           amountToAllocate = remainingPayment;
           remainingPayment = 0; // Saara paisa khatam
+        }
+
+        const remainingForThisMonth = Math.round((actualDueForThisMonth - amountToAllocate) * 100) / 100;
+
+        // A. Update Fee Structure Status and Remaining Balance
+        if (remainingForThisMonth <= 0) {
+          newStatus = "PAID";
+        } else {
           newStatus = "PARTIALLY_PAID";
         }
 
-        const balanceLeftForThisMonth = actualDueForThisMonth - amountToAllocate;
-
-        // A. Update Fee Structure Status and Remaining Balance
         await tx.feeStructure.update({
           where: { id: feeRecord.id },
-          data: { 
-            status: newStatus,
-            remaining: balanceLeftForThisMonth
-          }
+          data: { status: newStatus }
         });
 
         // B. Create Entry in Payment Table for history tracking
-        await tx.payment.create({
+        const createdPayment = await tx.payment.create({
           data: {
             feeStructureId: feeRecord.id,
             amountPaid: amountToAllocate,
-            balanceLeft: balanceLeftForThisMonth,
-            paymentMode: paymentMode
+            paymentMode: paymentMode || "CASH"
           }
         });
 
         processedPayments.push({
-          month: feeRecord.month,
+          feeMonth: feeRecord.month,
           allocatedAmount: amountToAllocate,
           monthStatus: newStatus,
-          monthBalanceLeft: balanceLeftForThisMonth,
+          monthRemainingBalance: remainingForThisMonth,
           feeStructureId: feeRecord.id
         });
       }

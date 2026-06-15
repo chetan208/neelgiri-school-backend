@@ -11,6 +11,8 @@ let sock = null;
 let isConnected = false;
 let qrCodeData = null;
 let connectionInfo = null;
+let isLoggingOut = false;
+let reconnectAttempts = 0;
 
 // Custom Auth State to store session data in PostgreSQL via Prisma
 const usePrismaAuthState = async (sessionId) => {
@@ -58,15 +60,27 @@ const usePrismaAuthState = async (sessionId) => {
             keys: {
                 get: async (type, ids) => {
                     const data = {};
-                    await Promise.all(
-                        ids.map(async (id) => {
-                            let value = await readData(`${type}-${id}`);
+                    try {
+                        const keysToFetch = ids.map(id => `${sessionId}-${type}-${id}`);
+                        const sessions = await prisma.whatsAppSession.findMany({
+                            where: { id: { in: keysToFetch } }
+                        });
+                        
+                        const sessionMap = {};
+                        sessions.forEach(s => {
+                            sessionMap[s.id] = JSON.parse(s.value, BufferJSON.reviver);
+                        });
+
+                        for (const id of ids) {
+                            let value = sessionMap[`${sessionId}-${type}-${id}`];
                             if (type === 'app-state-sync-key' && value) {
                                 value = proto.Message.AppStateSyncKeyData.fromObject(value);
                             }
                             data[id] = value;
-                        })
-                    );
+                        }
+                    } catch (error) {
+                        console.error("Prisma Auth State Bulk Read Error:", error);
+                    }
                     return data;
                 },
                 set: async (data) => {
@@ -95,13 +109,21 @@ const usePrismaAuthState = async (sessionId) => {
 // Reusable function to initialize connection
 export const initWhatsApp = async () => {
     try {
-        const { state, saveCreds } = await usePrismaAuthState('default_session');
+        // Automatically isolate sessions so Localhost and Render don't conflict
+        const isRender = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
+        const defaultSessionName = isRender ? 'render_production_session' : 'local_dev_session';
+        const sessionId = process.env.WHATSAPP_SESSION_ID || defaultSessionName;
+        
+        const { state, saveCreds } = await usePrismaAuthState(sessionId);
         
         const makeSocket = makeWASocket.default || makeWASocket;
         sock = makeSocket({
             auth: state,
             printQRInTerminal: false,
-            logger: logger
+            logger: logger,
+            browser: ['Neelgiri School', 'Chrome', '10.15.7'],
+            syncFullHistory: false,
+            generateHighQualityLinkPreview: false
         });
 
         sock.ev.on('connection.update', (update) => {
@@ -118,17 +140,29 @@ export const initWhatsApp = async () => {
 
             if (connection === 'close') {
                 const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                console.log('🔄 WhatsApp Connection closed. Reconnecting in 5s:', shouldReconnect);
+                console.log('🔄 WhatsApp Connection closed. Reconnecting in future:', shouldReconnect);
                 isConnected = false;
                 connectionInfo = null;
+                
+                // Cleanup old listeners
+                sock.ev.removeAllListeners('connection.update');
+                sock.ev.removeAllListeners('creds.update');
+
                 if (shouldReconnect) {
-                    setTimeout(initWhatsApp, 5000);
+                    reconnectAttempts++;
+                    const delay = Math.min(5000 * Math.pow(2, reconnectAttempts - 1), 60000); // Max 60s
+                    console.log(`⏳ Reconnecting in ${delay/1000}s (Attempt ${reconnectAttempts})`);
+                    setTimeout(initWhatsApp, delay);
+                } else {
+                    console.log('📱 User logged out from phone. Cleaning up database session...');
+                    logoutWhatsApp().catch(e => console.error(e));
                 }
             } else if (connection === 'open') {
                 console.log('\n✅ WhatsApp Client is fully authenticated and ready!');
                 isConnected = true;
                 qrCodeData = null;
                 connectionInfo = sock.user;
+                reconnectAttempts = 0; // Reset counter on success
             }
         });
 
@@ -157,14 +191,19 @@ export const getWhatsAppStatus = () => {
  * Log out from current WhatsApp session and delete credentials to start fresh
  */
 export const logoutWhatsApp = async () => {
+    if (isLoggingOut) return { success: false, error: "Logout already in progress" };
+    isLoggingOut = true;
+    
     try {
         if (sock) {
+            sock.ev.removeAllListeners('connection.update');
+            sock.ev.removeAllListeners('creds.update');
             try {
                 await sock.logout();
-            } catch (e) {}
+            } catch (e) { console.error("Socket logout error:", e); }
             try {
                 sock.end();
-            } catch (e) {}
+            } catch (e) { console.error("Socket end error:", e); }
             sock = null;
         }
         isConnected = false;
@@ -175,8 +214,12 @@ export const logoutWhatsApp = async () => {
             fs.rmSync('./whatsapp_session', { recursive: true, force: true });
         }
         try {
+            const isRender = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
+            const defaultSessionName = isRender ? 'render_production_session' : 'local_dev_session';
+            const activeSessionId = process.env.WHATSAPP_SESSION_ID || defaultSessionName;
+
             await prisma.whatsAppSession.deleteMany({
-                where: { sessionId: 'default_session' }
+                where: { sessionId: activeSessionId }
             });
         } catch(e) {
             console.error("Failed to delete session from database", e);
@@ -184,9 +227,11 @@ export const logoutWhatsApp = async () => {
 
         // Restart socket to generate new QR Code
         await initWhatsApp();
+        isLoggingOut = false;
         return { success: true };
     } catch (error) {
         console.error("Error logging out WhatsApp:", error);
+        isLoggingOut = false;
         return { success: false, error: error.message };
     }
 };
@@ -203,6 +248,10 @@ export const sendWhatsAppMessage = async (number, message) => {
                 success: false,
                 error: "WhatsApp service is not connected or scanned yet. Please scan the QR code first."
             };
+        }
+
+        if (!number || typeof number !== 'string') {
+            return { success: false, error: "Invalid phone number provided." };
         }
 
         // Number cleanup: Only digits

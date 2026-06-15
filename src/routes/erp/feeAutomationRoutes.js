@@ -54,4 +54,35 @@ router.put("/settings", checkOwnerMiddleware, async (req, res) => {
   }
 });
 
+router.get("/logs", checkOwnerMiddleware, async (req, res) => {
+  try {
+    const rawLogs = await prisma.feeAutomationLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200
+    });
+
+    const studentIds = rawLogs.map(l => l.studentId);
+    
+    const students = await prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      include: { studentclass: true }
+    });
+
+    const studentMap = {};
+    for (const st of students) {
+      studentMap[st.id] = st;
+    }
+
+    const logs = rawLogs.map(log => ({
+      ...log,
+      student: studentMap[log.studentId] || null
+    }));
+
+    res.status(200).json({ success: true, logs });
+  } catch (error) {
+    console.error("Error fetching automation logs:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 export default router;

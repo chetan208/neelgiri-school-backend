@@ -32,14 +32,14 @@ export const ensureStudentFeeForMonth = async (student, monthStr, startDate) => 
     }
   });
 
-  const tuitionFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : parseFloat(student.studentclass.tuitionFee || 0);
-  const examFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : parseFloat(student.studentclass.examFee || 0);
-  const computerFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : parseFloat(student.studentclass.computerFee || 0);
-  const admissionFeeConfig = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : parseFloat(student.studentclass.admissionFee || 0);
-  const tieBeltBooks = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : parseFloat(student.studentclass.tieBeltBooks || 0);
-  const ptmFine = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : parseFloat(student.studentclass.ptmFine || 0);
-  const buildingFund = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : parseFloat(student.studentclass.buildingFund || 0);
-  const annualCharges = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : parseFloat(student.studentclass.annualCharges || 0);
+  const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(student.studentclass.tuitionFee) || 0;
+  const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(student.studentclass.examFee) || 0;
+  const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(student.studentclass.computerFee) || 0;
+  const admissionFeeConfig = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(student.studentclass.admissionFee) || 0;
+  const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(student.studentclass.tieBeltBooks) || 0;
+  const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(student.studentclass.ptmFine) || 0;
+  const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(student.studentclass.buildingFund) || 0;
+  const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(student.studentclass.annualCharges) || 0;
 
   let busCharges = 0;
   if (student.station) {
@@ -69,7 +69,6 @@ export const ensureStudentFeeForMonth = async (student, monthStr, startDate) => 
       annualCharges,
       schoolBusCharges: busCharges,
       total: totalDemand,
-      remaining: totalDemand,
       status: "PENDING"
     },
     include: { payments: true }

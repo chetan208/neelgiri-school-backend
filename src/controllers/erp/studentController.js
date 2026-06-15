@@ -86,14 +86,14 @@ const addStudent = async (req, res) => {
       const monthName = monthNames[currentLoopDate.getMonth()];
       const monthlyFeeConfig = monthlyFees.find(f => f.monthName === monthName);
 
-      const tuitionFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : parseFloat(targetClass.tuitionFee || 0);
-      const examFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : parseFloat(targetClass.examFee || 0);
-      const computerFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : parseFloat(targetClass.computerFee || 0);
-      const admissionFee = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : parseFloat(targetClass.admissionFee || 0);
-      const tieBeltBooks = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : parseFloat(targetClass.tieBeltBooks || 0);
-      const ptmFine = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : parseFloat(targetClass.ptmFine || 0);
-      const buildingFund = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : parseFloat(targetClass.buildingFund || 0);
-      const annualCharges = monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : parseFloat(targetClass.annualCharges || 0);
+      const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0;
+      const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0;
+      const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0;
+      const admissionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(targetClass.admissionFee) || 0;
+      const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(targetClass.tieBeltBooks) || 0;
+      const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(targetClass.ptmFine) || 0;
+      const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(targetClass.buildingFund) || 0;
+      const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
 
       const currentAdmissionFee = (feeStructuresToCreate.length === 0) ? admissionFee : 0;
       const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges;
@@ -118,7 +118,7 @@ const addStudent = async (req, res) => {
     }
 
     // 5. WATERFALL ALLOCATION LOGIC (In-Memory Processing before DB insert)
-    let dynamicPool = parseFloat(initialAmountPaid || 0);
+    let dynamicPool = parseFloat(initialAmountPaid) || 0;
     
     // 6. Database Transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -147,7 +147,7 @@ const addStudent = async (req, res) => {
         if (dynamicPool > 0) {
           if (dynamicPool >= feeData.total) {
             allocated = feeData.total;
-            dynamicPool -= feeData.total;
+            dynamicPool = Math.round((dynamicPool - feeData.total) * 100) / 100;
             finalStatus = "PAID";
           } else {
             allocated = dynamicPool;
@@ -182,7 +182,6 @@ const addStudent = async (req, res) => {
             data: {
               feeStructureId: createdFee.id,
               amountPaid: allocated,
-              balanceLeft: createdFee.total - allocated,
               paymentMode: paymentMode || "CASH"
             }
           });
@@ -471,8 +470,8 @@ const getFeeStats = async (req, res) => {
       for (const fee of student.feeStructures) {
         if (fee.status !== "PAID") {
           const feeMonthDate = parseMonthStr(fee.month);
-          const totalAlreadyPaid = fee.payments.reduce((sum, p) => sum + parseFloat(p.amountPaid), 0);
-          const due = parseFloat(fee.total) - totalAlreadyPaid;
+          const totalAlreadyPaid = fee.payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
+          const due = Math.round(((parseFloat(fee.total) || 0) - totalAlreadyPaid) * 100) / 100;
 
           if (feeMonthDate < currentMonthDate) {
             hasPrevPending = true;
@@ -546,21 +545,27 @@ const updateStudentFeeStructure = async (req, res) => {
       return res.status(404).json({ success: false, message: "Fee structure not found" });
     }
 
-    const nAdmission = parseFloat(admissionFee ?? existing.admissionFee);
-    const nTuition = parseFloat(tuitionFee ?? existing.tuitionFee);
-    const nBus = parseFloat(schoolBusCharges ?? existing.schoolBusCharges);
-    const nExam = parseFloat(examFee ?? existing.examFee);
-    const nComputer = parseFloat(computerFee ?? existing.computerFee);
-    const nPtm = parseFloat(ptmFine ?? existing.ptmFine);
-    const nTieBelt = parseFloat(tieBeltBooks ?? existing.tieBeltBooks);
-    const nBuilding = parseFloat(buildingFund ?? existing.buildingFund);
-    const nAnnual = parseFloat(annualCharges ?? existing.annualCharges);
+    const parseSafe = (val, fallback) => {
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) return parsed;
+      return parseFloat(fallback) || 0;
+    };
 
-    const newTotal = nAdmission + nTuition + nBus + nExam + nComputer + nPtm + nTieBelt + nBuilding + nAnnual;
-    const totalPaid = existing.payments.reduce((sum, p) => sum + parseFloat(p.amountPaid), 0);
+    const nAdmission = parseSafe(admissionFee, existing.admissionFee);
+    const nTuition = parseSafe(tuitionFee, existing.tuitionFee);
+    const nBus = parseSafe(schoolBusCharges, existing.schoolBusCharges);
+    const nExam = parseSafe(examFee, existing.examFee);
+    const nComputer = parseSafe(computerFee, existing.computerFee);
+    const nPtm = parseSafe(ptmFine, existing.ptmFine);
+    const nTieBelt = parseSafe(tieBeltBooks, existing.tieBeltBooks);
+    const nBuilding = parseSafe(buildingFund, existing.buildingFund);
+    const nAnnual = parseSafe(annualCharges, existing.annualCharges);
+
+    const newTotal = Math.round((nAdmission + nTuition + nBus + nExam + nComputer + nPtm + nTieBelt + nBuilding + nAnnual) * 100) / 100;
+    const totalPaid = existing.payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
 
     let newStatus = "PENDING";
-    if (totalPaid >= newTotal) {
+    if (Math.round((newTotal - totalPaid) * 100) / 100 <= 0) {
       newStatus = "PAID";
     } else if (totalPaid > 0) {
       newStatus = "PARTIALLY_PAID";
