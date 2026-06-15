@@ -2,8 +2,10 @@ import {prisma} from '../../lib/prisma.ts'
 import bcrypt from 'bcryptjs';
 import { sendOtpEmail } from '../services/emailService.js';
 import jwt from "jsonwebtoken";
-import cloudinary from '../../config/cloudinaryImage.js'
+import cloudinary, { cloud1Config, cloud2Config } from '../../config/cloudinaryImage.js'
 import generateToken from '../services/generateToken.js';
+
+let useFirstTeacherCloud = true;
 
 
 
@@ -48,11 +50,12 @@ const TeacherSingup = async (req, res) => {
         existingTeacher.otp = otp; 
         existingTeacher.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
 
+        const { id, ...updateData } = existingTeacher;
         await prisma.teacher.update({
             where: {
                 email: email
             },
-            data: existingTeacher
+            data: updateData
         });
 
         await sendOtpEmail(email, otp);
@@ -128,11 +131,12 @@ const varifyOtp = async (req, res) => {
         teacher.otpExpiry = null;
 
         const token = await generateToken(teacher);
+        const { id: teacherId, ...updateDataOtp } = teacher;
         await prisma.teacher.update({
             where: {
                 email: email
             },
-            data: teacher
+            data: updateDataOtp
         });
 
         
@@ -168,28 +172,59 @@ const completeProfile = async (req, res) => {
             return res.status(400).json({message: "Teacher not found"});
         }
 
-        if(req.file){
+        let uploadedResult = null;
+        let uploadedConfig = null;
 
-            const result = await cloudinary.uploader.upload(req.file.path, {
+        if(req.file){
+            if (teacher.imagePublicId) {
+                let deleteConfig = cloud1Config;
+                if (teacher.cloudName === cloud2Config.cloud_name) {
+                    deleteConfig = cloud2Config;
+                }
+                await cloudinary.uploader.destroy(teacher.imagePublicId, {
+                    ...deleteConfig
+                });
+            }
+
+            const currentConfig = useFirstTeacherCloud ? cloud1Config : cloud2Config;
+            useFirstTeacherCloud = !useFirstTeacherCloud;
+
+            uploadedConfig = currentConfig;
+            uploadedResult = await cloudinary.uploader.upload(req.file.path, {
                 folder: 'teacher_profiles',
-                public_id: `${teacher.id}_profile`,
+                public_id: `${teacher.id}_profile_${Date.now()}`,
                 overwrite: true,
+                ...currentConfig
             });
             
-            teacher.imageUrl = result.secure_url;
-            teacher.imagePublicId = result.public_id;
+            teacher.imageUrl = uploadedResult.secure_url;
+            teacher.imagePublicId = uploadedResult.public_id;
+            teacher.cloudName = currentConfig.cloud_name;
         }
 
         teacher.subject = subject;
         teacher.qualification = qualification;
         teacher.bio = bio;
 
-        await prisma.teacher.update({
-            where: {
-                email: email
-            },
-            data: teacher
-        });
+        const { id: tId, createdAt, ...updateDataProfile } = teacher;
+
+        try {
+            await prisma.teacher.update({
+                where: {
+                    email: email
+                },
+                data: updateDataProfile
+            });
+        } catch (dbError) {
+            // Database update failed. Rollback Cloudinary upload if one was just performed.
+            if (uploadedResult) {
+                console.log("Database update failed. Rolling back Cloudinary upload...");
+                await cloudinary.uploader.destroy(uploadedResult.public_id, {
+                    ...uploadedConfig
+                });
+            }
+            throw dbError; // throw it so the outer catch can handle it
+        }
 
         res.status(200).json({message: "Profile completed successfully"});
 
@@ -271,6 +306,17 @@ const deleteTeacher = async (req, res) => {
         if (!teacher) {
             return res.status(404).json({ message: "Teacher not found" });
         }
+
+        if (teacher.imagePublicId) {
+            let deleteConfig = cloud1Config;
+            if (teacher.cloudName === cloud2Config.cloud_name) {
+                deleteConfig = cloud2Config;
+            }
+            await cloudinary.uploader.destroy(teacher.imagePublicId, {
+                ...deleteConfig
+            });
+        }
+
         await prisma.teacher.delete({
             where: { email }
         });

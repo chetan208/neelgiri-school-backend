@@ -1,5 +1,7 @@
 import {prisma } from "../../lib/prisma.ts";
-import cloudinary from "../../config/cloudinaryPdf.js";
+import cloudinary, { cloudPdf1Config, cloudPdf2Config } from "../../config/cloudinaryPdf.js";
+
+let useFirstPdfCloud = true;
 
 const createNotice = async (req, res) => {
     const {type,title,description} = req.body;
@@ -9,9 +11,13 @@ const createNotice = async (req, res) => {
         // File upload handling
         let documentUrl = null;
         let documentPublicId = null;
+        let cloudName = null;
         if (req.file) {
             // File type check kar rahe hain
             const isPdf = req.file.mimetype === 'application/pdf';
+
+            const currentConfig = useFirstPdfCloud ? cloudPdf1Config : cloudPdf2Config;
+            useFirstPdfCloud = !useFirstPdfCloud; // toggle the boolean
 
             const result = await cloudinary.uploader.upload(req.file.path, {
                 // PDF ke liye 'raw', baaki (images) ke liye 'image'
@@ -19,11 +25,13 @@ const createNotice = async (req, res) => {
                 folder: "notices",
                 access_mode: "public",
                 // Agar PDF hai toh original extension ke sath save karega
-                ...(isPdf && { public_id: req.file.originalname }) 
+                ...(isPdf && { public_id: req.file.originalname }),
+                ...currentConfig
             });
             
             documentUrl = result.secure_url;
             documentPublicId = result.public_id;
+            cloudName = currentConfig.cloud_name;
         }
 
         
@@ -33,7 +41,8 @@ const createNotice = async (req, res) => {
                 title,
                 description,
                 documentUrl,
-                documentPublicId
+                documentPublicId,
+                cloudName
             }
         });
         res.status(201).json(newNotice);
@@ -85,18 +94,28 @@ const updateNotice = async (req, res) => {
                 where: { id: parseInt(id) }
             });
             if (existingNotice && existingNotice.documentPublicId) {
+                let deleteConfig = cloudPdf1Config;
+                if (existingNotice.cloudName === cloudPdf2Config.cloud_name) {
+                    deleteConfig = cloudPdf2Config;
+                }
+                
                 await cloudinary.uploader.destroy(existingNotice.documentPublicId, {
-                    resource_type: 'raw'
+                    resource_type: 'raw',
+                    ...deleteConfig
                 });
             }
 
             // upload the new document to Cloudinary
             const isPdf = req.file.mimetype === 'application/pdf';
+            const currentConfig = useFirstPdfCloud ? cloudPdf1Config : cloudPdf2Config;
+            useFirstPdfCloud = !useFirstPdfCloud; // toggle the boolean
+
             const result = await cloudinary.uploader.upload(req.file.path, {
                 resource_type: isPdf ? "auto" : "image",
                 folder: "notices",
                 access_mode: "public",
-                ...(isPdf && { public_id: req.file.originalname }) 
+                ...(isPdf && { public_id: req.file.originalname }),
+                ...currentConfig
             });
 
             // update the notice with new document details
@@ -104,7 +123,8 @@ const updateNotice = async (req, res) => {
                 where: { id: parseInt(id) },
                 data: {
                     documentUrl: result.secure_url,
-                    documentPublicId: result.public_id
+                    documentPublicId: result.public_id,
+                    cloudName: currentConfig.cloud_name
                 }
             });
         }
@@ -133,8 +153,14 @@ const deleteNotice = async (req, res) => {
         });
 
         if (existingNotice && existingNotice.documentPublicId) {
+            let deleteConfig = cloudPdf1Config;
+            if (existingNotice.cloudName === cloudPdf2Config.cloud_name) {
+                deleteConfig = cloudPdf2Config;
+            }
+
             await cloudinary.uploader.destroy(existingNotice.documentPublicId, {
-                resource_type: 'raw'
+                resource_type: 'raw',
+                ...deleteConfig
             });
         }
         await prisma.notice.delete({

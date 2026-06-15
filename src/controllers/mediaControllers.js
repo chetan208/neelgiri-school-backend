@@ -1,6 +1,9 @@
 import { prisma } from "../../lib/prisma.ts";
-import cloudinary from "../../config/cloudinaryImage.js";
+import cloudinary, { cloud1Config, cloud2Config } from "../../config/cloudinaryImage.js";
 import { NullTypes } from "@prisma/client/runtime/client";
+
+// Global boolean for round-robin
+let useFirstImageCloud = true;
 
 const uploadMedia = async (req, res) => {
   const { title, mediaType, category ,url} = req.body;
@@ -44,19 +47,25 @@ const uploadMedia = async (req, res) => {
         // upload each image to Cloudinary and save the media record in the database
         const uploadedMedia = [];
         for (const file of req.files) {
+            // Select cloud config via round-robin boolean
+            const currentConfig = useFirstImageCloud ? cloud1Config : cloud2Config;
+            useFirstImageCloud = !useFirstImageCloud; // toggle the boolean
+
             const result = await cloudinary.uploader.upload(file.path, {
                 folder: "media_gallery",
+                ...currentConfig
             });
-            uploadedMedia.push(result);
+            uploadedMedia.push({ result, cloudName: currentConfig.cloud_name });
         }
 
-        const mediaRecords = await Promise.all(uploadedMedia.map(async (media) => {
+        const mediaRecords = await Promise.all(uploadedMedia.map(async (mediaObj) => {
             return await prisma.mediaGallery.create({
                 data: {
                     title,
                     mediaType,
-                    url: media.secure_url,
-                    publicId: media.public_id,
+                    url: mediaObj.result.secure_url,
+                    publicId: mediaObj.result.public_id,
+                    cloudName: mediaObj.cloudName,
                     categoryId: categoryRecord.id,
                 },
                 include: {
@@ -99,7 +108,15 @@ const deleteMedia = async (req, res) => {
         // check if media is image and delete from cloudinary
         for (const media of mediaToDelete) {
             if (media.mediaType === "image" && media.publicId) {
-                await cloudinary.uploader.destroy(media.publicId);
+                // Determine which cloud config to use based on stored cloudName
+                let deleteConfig = cloud1Config; // Fallback to primary
+                if (media.cloudName === cloud2Config.cloud_name) {
+                    deleteConfig = cloud2Config;
+                }
+
+                await cloudinary.uploader.destroy(media.publicId, {
+                    ...deleteConfig
+                });
                 
                 await prisma.mediaGallery.delete({
                     where: {

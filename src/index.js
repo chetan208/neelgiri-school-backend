@@ -13,7 +13,9 @@ import {
   PYQsRoute,
   teacherRoutes,
   calendarRoutes,
-  topResultsRoutes
+  topResultsRoutes,
+  erpRoutes,
+  transportPublicRoutes
   } from './routes/index.js';
 
 
@@ -53,8 +55,15 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/top-results', topResultsRoutes);
-const PORT = process.env.PORT;
+app.use('/api/erp', erpRoutes);
+app.use('/api/public/transport', transportPublicRoutes);
+
+
+import { initFeeAutomationCron } from './services/feeAutomationCron.js';
+
+const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  initFeeAutomationCron();
 });

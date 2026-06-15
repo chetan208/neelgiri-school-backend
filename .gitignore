@@ -2,9 +2,48 @@ node_modules
 # Keep environment variables out of version control
 .env
 
+# Prisma generated folders
 /src/generated/prisma
-
 /generated/prisma
 
+# WhatsApp session data (should not be in version control)
+whatsapp_session/
+whatsapp_sessions/
+
+# Temporary notes and test files
+notes.md
 test.ts 
 test.js
+test-connection.js
+list-teachers.js
+nodemon.json
+
+
+# Database seeding scripts
+seed*.js
+seed*.ts
+seed-1000-student.js
+seed-fees.js
+
+# Logs and Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build output and coverage
+/dist
+/build
+/coverage
+.vercel/
+

@@ -8,10 +8,13 @@ import mediaRoutes from './mediaRoutes.js';
 import contactRoutes from './contactRoute.js';
 import calendarRoutes from './calendarRoutes.js';
 import topResultsRoutes from './topResultsRoutes.js';
+import erpRoutes from './erp.js'
+import transportPublicRoutes from './transportPublicRoutes.js';
+
 
 export { 
     teacherRoutes, 
-    herostatsRoutes , 
+    herostatsRoutes,
     noticesRoutes,
     authRoutes,
     PYQsRoute,
@@ -19,6 +22,8 @@ export {
     mediaRoutes,
     contactRoutes,
     calendarRoutes,
-    topResultsRoutes
+    topResultsRoutes,
+    erpRoutes,
+    transportPublicRoutes
 };
 

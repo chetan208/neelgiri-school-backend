@@ -1,5 +1,7 @@
-import cloudinary from "../../config/cloudinaryPdf.js";
+import cloudinary, { cloudPdf1Config, cloudPdf2Config } from "../../config/cloudinaryPdf.js";
 import { prisma } from "../../lib/prisma.ts";
+
+let useFirstPdfCloud = true;
 
 
 const uploadPYQ = async (req, res) => {
@@ -15,9 +17,13 @@ const uploadPYQ = async (req, res) => {
 
           
 
+            const currentConfig = useFirstPdfCloud ? cloudPdf1Config : cloudPdf2Config;
+            useFirstPdfCloud = !useFirstPdfCloud;
+
             const result = await cloudinary.uploader.upload(file.path, {
                 folder: `PYQs/${className}`,
                 public_id: `${className}_${Date.now()}`,
+                ...currentConfig
             });
 
             const pyq = await prisma.pYQ.create({
@@ -25,6 +31,7 @@ const uploadPYQ = async (req, res) => {
                     className: className,
                     fileUrl: result.secure_url,
                     filePublicId: result.public_id,
+                    cloudName: currentConfig.cloud_name,
                     year: year,
                     subject: subject,
                     term: term
@@ -80,7 +87,14 @@ const deletePYQ = async (req, res) => {
         }
 
         // delete from cloudinary
-        await cloudinary.uploader.destroy(pyq.filePublicId);
+        let deleteConfig = cloudPdf1Config;
+        if (pyq.cloudName === cloudPdf2Config.cloud_name) {
+            deleteConfig = cloudPdf2Config;
+        }
+
+        await cloudinary.uploader.destroy(pyq.filePublicId, {
+            ...deleteConfig
+        });
 
         await prisma.pYQ.delete({
             where: {

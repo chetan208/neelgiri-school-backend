@@ -28,6 +28,7 @@ model Teacher {
   qualification String?
   imageUrl      String?
   imagePublicId String?
+  cloudName     String?
   role          TeacherRole @default(Teacher)
   isPrincipal   Boolean? @default(false)
   bio           String?
@@ -87,6 +88,7 @@ model Notice {
   description     String   @db.Text
   documentUrl       String
   documentPublicId String
+  cloudName         String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -99,6 +101,7 @@ model PYQ {
   term      String?   // E.g., "Board Exam", "Final Term"
   fileUrl   String?   // Cloudinary ka secure PDF URL yahan save hoga
   filePublicId String?
+  cloudName    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -150,6 +153,7 @@ model MediaGallery {
   mediaType  mediaType 
   url        String
   publicId   String?  @unique
+  cloudName  String?
   order      Int      @default(0)
   
   // Relation Fields
@@ -198,8 +202,171 @@ model TopResult {
   parentsName   String
   imageUrl      String?
   imagePublicId String?
+  cloudName     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@map("top_results")
+}
+
+enum FeeStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+}
+
+model Student {
+  id              String         @id @default(uuid())
+  name            String
+  fatherName      String
+  motherName      String?
+  dateOfAdmission DateTime?
+  cardNo          String         
+  contactNo       String
+  station         String?        // Bus stop name; null = day scholar
+
+  classId        String
+  studentclass   Class    @relation(fields: [classId], references: [id])
+
+  feeStructures   FeeStructure[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  sessionId       String
+  session         Session  @relation(fields: [sessionId], references: [id])
+
+  @@unique([cardNo, sessionId])
+  @@map("students")
+}
+
+model Class{
+  id                String @id @default(uuid())
+  className         String  @unique
+  students          Student[]
+
+  admissionFee     Decimal  @default(0) @db.Decimal(10, 2)
+  tuitionFee       Decimal  @default(0) @db.Decimal(10, 2)
+  examFee          Decimal  @default(0) @db.Decimal(10, 2)
+  computerFee      Decimal  @default(0) @db.Decimal(10, 2)
+  ptmFine          Decimal  @default(0) @db.Decimal(10, 2)
+  buildingFund     Decimal  @default(0) @db.Decimal(10, 2)
+  annualCharges    Decimal  @default(0) @db.Decimal(10, 2)
+  tieBeltBooks     Decimal  @default(0) @db.Decimal(10, 2)
+
+  @@map("classes")     
+}
+
+model FeeStructure {
+  id               String      @id @default(uuid())
+  studentId        String
+  student          Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  month            String      // Format: "Month-YYYY", e.g., "June-2026"
+  studentClass     String?     // Class the student was in at time of generation (e.g. "Class 1")
+  admissionFee     Decimal     @default(0) @db.Decimal(10, 2)
+  tuitionFee       Decimal     @default(0) @db.Decimal(10, 2)
+  examFee          Decimal     @default(0) @db.Decimal(10, 2)
+  schoolBusCharges Decimal     @default(0) @db.Decimal(10, 2)
+  ptmFine          Decimal     @default(0) @db.Decimal(10, 2)
+  computerFee      Decimal     @default(0) @db.Decimal(10, 2)
+  tieBeltBooks     Decimal     @default(0) @db.Decimal(10, 2)
+  buildingFund     Decimal     @default(0) @db.Decimal(10, 2)
+  annualCharges    Decimal     @default(0) @db.Decimal(10, 2)
+  
+  remaining        Decimal     @default(0) @db.Decimal(10, 2)
+  total            Decimal     @db.Decimal(10, 2)
+  status           FeeStatus   @default(PENDING)
+  payments         Payment[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([studentId, month])
+  @@map("fee_structures")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  feeStructureId String
+  feeStructure   FeeStructure  @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  amountPaid     Decimal       @db.Decimal(10, 2)
+  balanceLeft    Decimal       @db.Decimal(10, 2)
+  paymentMode    PaymentMode
+  date           DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  year      String    @unique // e.g., "2025-2026", "2026-2027"
+  students  Student[]
+  
+  createdAt DateTime  @default(now())
+  @@map("sessions")
+}
+
+model TransportFee {
+  id        String   @id @default(uuid())
+  station   String   @unique
+  amount    Decimal  @default(0) @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt
+
+  @@map("transport_fees")
+}
+
+model ClassMonthlyFee {
+  id            String   @id @default(uuid())
+  className     String
+  monthName     String   // e.g., "January", "February", "September"
+  admissionFee  Decimal  @default(0) @db.Decimal(10, 2)
+  tuitionFee    Decimal  @default(0) @db.Decimal(10, 2)
+  examFee       Decimal  @default(0) @db.Decimal(10, 2)
+  computerFee   Decimal  @default(0) @db.Decimal(10, 2)
+  tieBeltBooks  Decimal  @default(0) @db.Decimal(10, 2)
+  ptmFine       Decimal  @default(0) @db.Decimal(10, 2)
+  buildingFund  Decimal  @default(0) @db.Decimal(10, 2)
+  annualCharges Decimal  @default(0) @db.Decimal(10, 2)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([className, monthName])
+  @@map("class_monthly_fees")
+}
+
+model WhatsAppSession {
+  id        String   @id
+  sessionId String
+  category  String   // "creds" or "keys"
+  value     String   @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("whatsapp_sessions")
+}
+
+model FeeAutomationSetting {
+  id            String   @id @default("singleton")
+  isEnabled     Boolean  @default(false)
+  startDay      Int      @default(1)
+  windowDays    Int      @default(3)
+  updatedAt     DateTime @updatedAt
+
+  @@map("fee_automation_settings")
+}
+
+model FeeAutomationLog {
+  id            String   @id @default(uuid())
+  studentId     String
+  monthStr      String
+  status        String   // "PROCESSED", "FAILED"
+  createdAt     DateTime @default(now())
+
+  @@unique([studentId, monthStr])
+  @@map("fee_automation_logs")
 }
