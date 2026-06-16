@@ -5,7 +5,7 @@ const generateToken = async(user) => {
                 email: user.email, 
                 id: user.id,
                 role: user.role
-            }, process.env.JWT_SECRET);
+            }, process.env.JWT_SECRET,{ expiresIn: '30d' });
     return token;
 }
 

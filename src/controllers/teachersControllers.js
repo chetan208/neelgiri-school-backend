@@ -146,6 +146,7 @@ const varifyOtp = async (req, res) => {
                  httpOnly: true,
                  secure: true,
                 sameSite: "none", 
+                maxAge: 30 * 24 * 60 * 60 * 1000
             })
 
             .status(200)
@@ -274,7 +275,7 @@ const getTeachers = async (req, res) => {
     try {
         const teachers = await prisma.teacher.findMany({
             where: {
-                isVerified: true
+                isVerified: true,
             },
             select: {
                 name: true,

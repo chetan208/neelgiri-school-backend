@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -12,17 +7,10 @@ datasource db {
   provider = "postgresql"
 }
 
-enum TeacherRole{
-  Teacher
-  Admin
-  Owner
-
-}
-
 model Teacher {
-  id            String     @id @default(uuid())
+  id            String      @id @default(uuid())
   name          String?
-  email         String?  @unique
+  email         String?     @unique
   password      String?
   subject       String?
   qualification String?
@@ -30,16 +18,14 @@ model Teacher {
   imagePublicId String?
   cloudName     String?
   role          TeacherRole @default(Teacher)
-  isPrincipal   Boolean? @default(false)
+  isPrincipal   Boolean?    @default(false)
   bio           String?
   otp           String?
   otpExpiry     DateTime?
-  isVerified    Boolean? @default(false)
-  createdAt     DateTime @default(now())
-  phoneNumber      String?
+  isVerified    Boolean?    @default(false)
+  createdAt     DateTime    @default(now())
+  phoneNumber   String?
 }
-
-
 
 model HeroSlider {
   id              Int      @id @default(autoincrement())
@@ -47,7 +33,7 @@ model HeroSlider {
   tagline         String?
   titlePart1      String?
   titlePart2      String?
-  description     String?  @db.Text
+  description     String?
   btn1Label       String?
   btn1Url         String?
   btn2Label       String?
@@ -65,12 +51,6 @@ model SchoolStat {
   updatedAt DateTime @updatedAt
 }
 
-enum Role {
-  STUDENT
-  TEACHER
-  ADMIN
-}
-
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -82,112 +62,97 @@ model User {
 }
 
 model Notice {
-  id              Int      @id @default(autoincrement())
-  type            String   // "Urgent", "Academic", "Careers"
-  title           String
-  description     String   @db.Text
-  documentUrl       String
+  id               Int      @id @default(autoincrement())
+  type             String
+  title            String
+  description      String
+  documentUrl      String
   documentPublicId String
-  cloudName         String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  cloudName        String?
 }
 
 model PYQ {
-  id        Int      @id @default(autoincrement())
-  className     String?   // E.g., "12", "11"
-  subject   String?   // E.g., "Physics", "Chemistry"
-  year      String?   // E.g., "2025", "2024"
-  term      String?   // E.g., "Board Exam", "Final Term"
-  fileUrl   String?   // Cloudinary ka secure PDF URL yahan save hoga
+  id           Int      @id @default(autoincrement())
+  className    String?
+  subject      String?
+  year         String?
+  term         String?
+  fileUrl      String?
   filePublicId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   cloudName    String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@map("pyqs")
 }
 
-enum AdmissionStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model Admission {
-  id          String   @id
+  id          String          @id
   studentName String
   FatherName  String
   MotherName  String
   dob         DateTime
   targetClass String
-  address     String   @db.Text
+  address     String
   phoneNumber String
   email       String
   year        String
   status      AdmissionStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@map("admissions")
 }
 
 model AdmissionSetting {
-  id          String   @id @default(uuid())
-  isOpen      Boolean  @default(false)
-  activeYear  String   @unique
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  isOpen     Boolean  @default(false)
+  activeYear String   @unique
+  updatedAt  DateTime @updatedAt
 
   @@map("admission_settings")
 }
 
-enum mediaType{
-  video
-  image
-}
-
 model MediaGallery {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   title      String?
-  mediaType  mediaType 
+  mediaType  mediaType
   url        String
-  publicId   String?  @unique
+  publicId   String?   @unique
+  order      Int       @default(0)
+  categoryId String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   cloudName  String?
-  order      Int      @default(0)
-  
-  // Relation Fields
-  categoryId String  
-  category   Category @relation(fields: [categoryId], references: [id])
+  category   Category  @relation(fields: [categoryId], references: [id])
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([createdAt]) 
+  @@index([createdAt])
 }
 
 model Category {
-  id        String          @id @default(uuid()) 
-  name      String          @unique 
-  media     MediaGallery[]  
-  createdAt DateTime        @default(now())
+  id        String         @id @default(uuid())
+  name      String         @unique
+  createdAt DateTime       @default(now())
+  media     MediaGallery[]
 }
 
-model contactUs{
-  id        String          @id @default(uuid()) 
-  name      String          
-  phoneNumber    String
-  email     String
-  message   String  @db.Text
+model contactUs {
+  id          String @id @default(uuid())
+  name        String
+  phoneNumber String
+  email       String
+  message     String
 }
 
 model CalendarEvent {
   id          String    @id @default(uuid())
   title       String
-  description String?   @db.Text
+  description String?
   date        DateTime
   endDate     DateTime?
-  type        String    @default("holiday") // "holiday", "exam", "event", "other"
+  type        String    @default("holiday")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -202,22 +167,11 @@ model TopResult {
   parentsName   String
   imageUrl      String?
   imagePublicId String?
-  cloudName     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  cloudName     String?
 
   @@map("top_results")
-}
-
-enum FeeStatus {
-  PENDING
-  PARTIALLY_PAID
-  PAID
-}
-
-enum PaymentMode {
-  CASH
-  UPI
 }
 
 model Student {
@@ -226,83 +180,80 @@ model Student {
   fatherName      String
   motherName      String?
   dateOfAdmission DateTime?
-  cardNo          String         
+  cardNo          String
   contactNo       String
-  station         String?        // Bus stop name; null = day scholar
-
-  classId        String
-  studentclass   Class    @relation(fields: [classId], references: [id])
-
-  feeStructures   FeeStructure[]
+  station         String?
+  classId         String
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   sessionId       String
-  session         Session  @relation(fields: [sessionId], references: [id])
+  feeStructures   FeeStructure[]
+  studentclass    Class          @relation(fields: [classId], references: [id])
+  session         Session        @relation(fields: [sessionId], references: [id])
 
   @@unique([cardNo, sessionId])
   @@map("students")
 }
 
-model Class{
-  id                String @id @default(uuid())
-  className         String  @unique
-  students          Student[]
+model Class {
+  id            String    @id @default(uuid())
+  className     String    @unique
+  admissionFee  Decimal   @default(0) @db.Decimal(10, 2)
+  tuitionFee    Decimal   @default(0) @db.Decimal(10, 2)
+  examFee       Decimal   @default(0) @db.Decimal(10, 2)
+  computerFee   Decimal   @default(0) @db.Decimal(10, 2)
+  ptmFine       Decimal   @default(0) @db.Decimal(10, 2)
+  buildingFund  Decimal   @default(0) @db.Decimal(10, 2)
+  annualCharges Decimal   @default(0) @db.Decimal(10, 2)
+  tieBeltBooks  Decimal   @default(0) @db.Decimal(10, 2)
+  students      Student[]
 
-  admissionFee     Decimal  @default(0) @db.Decimal(10, 2)
-  tuitionFee       Decimal  @default(0) @db.Decimal(10, 2)
-  examFee          Decimal  @default(0) @db.Decimal(10, 2)
-  computerFee      Decimal  @default(0) @db.Decimal(10, 2)
-  ptmFine          Decimal  @default(0) @db.Decimal(10, 2)
-  buildingFund     Decimal  @default(0) @db.Decimal(10, 2)
-  annualCharges    Decimal  @default(0) @db.Decimal(10, 2)
-  tieBeltBooks     Decimal  @default(0) @db.Decimal(10, 2)
-
-  @@map("classes")     
+  @@map("classes")
 }
 
 model FeeStructure {
-  id               String      @id @default(uuid())
+  id               String    @id @default(uuid())
   studentId        String
-  student          Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  month            String      // Format: "Month-YYYY", e.g., "June-2026"
-  studentClass     String?     // Class the student was in at time of generation (e.g. "Class 1")
-  admissionFee     Decimal     @default(0) @db.Decimal(10, 2)
-  tuitionFee       Decimal     @default(0) @db.Decimal(10, 2)
-  examFee          Decimal     @default(0) @db.Decimal(10, 2)
-  schoolBusCharges Decimal     @default(0) @db.Decimal(10, 2)
-  ptmFine          Decimal     @default(0) @db.Decimal(10, 2)
-  computerFee      Decimal     @default(0) @db.Decimal(10, 2)
-  tieBeltBooks     Decimal     @default(0) @db.Decimal(10, 2)
-  buildingFund     Decimal     @default(0) @db.Decimal(10, 2)
-  annualCharges    Decimal     @default(0) @db.Decimal(10, 2)
-  total            Decimal     @db.Decimal(10, 2)
-  status           FeeStatus   @default(PENDING)
+  month            String
+  studentClass     String?
+  admissionFee     Decimal   @default(0) @db.Decimal(10, 2)
+  tuitionFee       Decimal   @default(0) @db.Decimal(10, 2)
+  examFee          Decimal   @default(0) @db.Decimal(10, 2)
+  schoolBusCharges Decimal   @default(0) @db.Decimal(10, 2)
+  ptmFine          Decimal   @default(0) @db.Decimal(10, 2)
+  computerFee      Decimal   @default(0) @db.Decimal(10, 2)
+  tieBeltBooks     Decimal   @default(0) @db.Decimal(10, 2)
+  buildingFund     Decimal   @default(0) @db.Decimal(10, 2)
+  annualCharges    Decimal   @default(0) @db.Decimal(10, 2)
+  total            Decimal   @db.Decimal(10, 2)
+  status           FeeStatus @default(PENDING)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   payments         Payment[]
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
 
   @@unique([studentId, month])
   @@map("fee_structures")
 }
 
 model Payment {
-  id             String        @id @default(uuid())
+  id             String       @id @default(uuid())
   feeStructureId String
-  feeStructure   FeeStructure  @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
-  amountPaid     Decimal       @db.Decimal(10, 2)
+  amountPaid     Decimal      @db.Decimal(10, 2)
   paymentMode    PaymentMode
-  date           DateTime      @default(now())
-  createdAt      DateTime      @default(now())
+  date           DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
 
   @@map("payments")
 }
 
 model Session {
   id        String    @id @default(uuid())
-  year      String    @unique // e.g., "2025-2026", "2026-2027"
-  students  Student[]
-  
+  year      String    @unique
   createdAt DateTime  @default(now())
+  students  Student[]
+
   @@map("sessions")
 }
 
@@ -318,7 +269,7 @@ model TransportFee {
 model ClassMonthlyFee {
   id            String   @id @default(uuid())
   className     String
-  monthName     String   // e.g., "January", "February", "September"
+  monthName     String
   admissionFee  Decimal  @default(0) @db.Decimal(10, 2)
   tuitionFee    Decimal  @default(0) @db.Decimal(10, 2)
   examFee       Decimal  @default(0) @db.Decimal(10, 2)
@@ -327,7 +278,6 @@ model ClassMonthlyFee {
   ptmFine       Decimal  @default(0) @db.Decimal(10, 2)
   buildingFund  Decimal  @default(0) @db.Decimal(10, 2)
   annualCharges Decimal  @default(0) @db.Decimal(10, 2)
-
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -338,9 +288,8 @@ model ClassMonthlyFee {
 model WhatsAppSession {
   id        String   @id
   sessionId String
-  category  String   // "creds" or "keys"
-  value     String   @db.Text
-  
+  category  String
+  value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -348,22 +297,56 @@ model WhatsAppSession {
 }
 
 model FeeAutomationSetting {
-  id            String   @id @default("singleton")
-  isEnabled     Boolean  @default(false)
-  startDay      Int      @default(1)
-  windowDays    Int      @default(3)
-  updatedAt     DateTime @updatedAt
+  id         String   @id @default("singleton")
+  isEnabled  Boolean  @default(false)
+  startDay   Int      @default(1)
+  windowDays Int      @default(3)
+  updatedAt  DateTime @updatedAt
 
   @@map("fee_automation_settings")
 }
 
 model FeeAutomationLog {
-  id            String   @id @default(uuid())
-  studentId     String
-  monthStr      String
-  status        String   // "PROCESSED", "FAILED"
-  createdAt     DateTime @default(now())
+  id        String   @id @default(uuid())
+  studentId String
+  monthStr  String
+  status    String
+  createdAt DateTime @default(now())
 
   @@unique([studentId, monthStr])
   @@map("fee_automation_logs")
+}
+
+enum TeacherRole {
+  Teacher
+  Admin
+  Owner
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum AdmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum mediaType {
+  video
+  image
+}
+
+enum FeeStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMode {
+  CASH
+  UPI
 }

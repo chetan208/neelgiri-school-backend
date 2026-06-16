@@ -41,7 +41,8 @@ const TeacherLogin = async (req, res) => {
             .cookie("token", token, {
                 httpOnly: true,
                 secure:true,
-                sameSite: "none"
+                sameSite: "none",
+                maxAge: 30 * 24 * 60 * 60 * 1000
             })
             .status(200).json({message: "Login successful"});
         
