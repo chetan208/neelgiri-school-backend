@@ -14,8 +14,21 @@ let connectionInfo = null;
 let isLoggingOut = false;
 let reconnectAttempts = 0;
 
-// Custom Auth State to store session data in PostgreSQL via Prisma
+// Custom Auth State to store session data in PostgreSQL via Prisma with In-Memory Caching for Render
 const usePrismaAuthState = async (sessionId) => {
+    const cache = new Map();
+
+    // Pre-load ALL session keys from DB into cache to avoid any latency during runtime
+    try {
+        const sessions = await prisma.whatsAppSession.findMany({
+            where: { sessionId }
+        });
+        sessions.forEach(s => cache.set(s.id, s.value));
+        console.log(`Loaded ${sessions.length} WhatsApp session keys from database for ${sessionId}.`);
+    } catch(e) {
+        console.error("Failed to preload session from DB:", e);
+    }
+
     const writeData = async (data, id) => {
         try {
             const value = JSON.stringify(data, BufferJSON.replacer);
@@ -30,19 +43,6 @@ const usePrismaAuthState = async (sessionId) => {
         }
     };
 
-    const readData = async (id) => {
-        try {
-            const session = await prisma.whatsAppSession.findUnique({
-                where: { id: `${sessionId}-${id}` }
-            });
-            if (!session) return null;
-            return JSON.parse(session.value, BufferJSON.reviver);
-        } catch (error) {
-            console.error("Prisma Auth State Read Error:", error);
-            return null;
-        }
-    };
-
     const removeData = async (id) => {
         try {
             await prisma.whatsAppSession.delete({
@@ -51,8 +51,8 @@ const usePrismaAuthState = async (sessionId) => {
         } catch (e) {} // ignore if not found
     };
 
-    let credsStr = await readData('creds');
-    let creds = credsStr || initAuthCreds();
+    let credsStr = cache.get(`${sessionId}-creds`);
+    let creds = credsStr ? JSON.parse(credsStr, BufferJSON.reviver) : initAuthCreds();
 
     return {
         state: {
@@ -60,26 +60,15 @@ const usePrismaAuthState = async (sessionId) => {
             keys: {
                 get: async (type, ids) => {
                     const data = {};
-                    try {
-                        const keysToFetch = ids.map(id => `${sessionId}-${type}-${id}`);
-                        const sessions = await prisma.whatsAppSession.findMany({
-                            where: { id: { in: keysToFetch } }
-                        });
-                        
-                        const sessionMap = {};
-                        sessions.forEach(s => {
-                            sessionMap[s.id] = JSON.parse(s.value, BufferJSON.reviver);
-                        });
-
-                        for (const id of ids) {
-                            let value = sessionMap[`${sessionId}-${type}-${id}`];
+                    for (const id of ids) {
+                        let value = cache.get(`${sessionId}-${type}-${id}`);
+                        if (value) {
+                            value = JSON.parse(value, BufferJSON.reviver);
                             if (type === 'app-state-sync-key' && value) {
                                 value = proto.Message.AppStateSyncKeyData.fromObject(value);
                             }
                             data[id] = value;
                         }
-                    } catch (error) {
-                        console.error("Prisma Auth State Bulk Read Error:", error);
                     }
                     return data;
                 },
@@ -90,17 +79,25 @@ const usePrismaAuthState = async (sessionId) => {
                             const value = data[category][id];
                             const key = `${category}-${id}`;
                             if (value) {
+                                // Save to cache immediately
+                                const strVal = JSON.stringify(value, BufferJSON.replacer);
+                                cache.set(`${sessionId}-${key}`, strVal);
+                                // Queue DB update
                                 tasks.push(writeData(value, key));
                             } else {
+                                cache.delete(`${sessionId}-${key}`);
                                 tasks.push(removeData(key));
                             }
                         }
                     }
-                    await Promise.all(tasks);
+                    // Run DB updates asynchronously without blocking Baileys
+                    Promise.all(tasks).catch(e => console.error("Batch DB save error:", e));
                 }
             }
         },
         saveCreds: () => {
+            const strVal = JSON.stringify(creds, BufferJSON.replacer);
+            cache.set(`${sessionId}-creds`, strVal);
             return writeData(creds, 'creds');
         }
     };
@@ -121,7 +118,7 @@ export const initWhatsApp = async () => {
             auth: state,
             printQRInTerminal: false,
             logger: logger,
-            browser: ['Neelgiri School', 'Chrome', '10.15.7'],
+            browser: ['Ubuntu', 'Chrome', '20.0.04'],
             syncFullHistory: false,
             generateHighQualityLinkPreview: false
         });
