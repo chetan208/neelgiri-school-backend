@@ -20,7 +20,7 @@ enum TeacherRole{
 }
 
 model Teacher {
-  id            Int      @id @default(uuid())
+  id            String     @id @default(uuid())
   name          String?
   email         String?  @unique
   password      String?
