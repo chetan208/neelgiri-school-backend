@@ -14,6 +14,20 @@ let connectionInfo = null;
 let isLoggingOut = false;
 let reconnectAttempts = 0;
 
+// Global queue to prevent Prisma connection pool exhaustion during massive key updates
+const dbWriteQueue = [];
+let isProcessingQueue = false;
+
+const processQueue = async () => {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+    while (dbWriteQueue.length > 0) {
+        const task = dbWriteQueue.shift();
+        try { await task(); } catch (e) { console.error("WhatsApp DB Task Error:", e); }
+    }
+    isProcessingQueue = false;
+};
+
 // Custom Auth State to store session data in PostgreSQL via Prisma with In-Memory Caching for Render
 const usePrismaAuthState = async (sessionId) => {
     const cache = new Map();
@@ -73,7 +87,6 @@ const usePrismaAuthState = async (sessionId) => {
                     return data;
                 },
                 set: async (data) => {
-                    const tasks = [];
                     for (const category in data) {
                         for (const id in data[category]) {
                             const value = data[category][id];
@@ -83,15 +96,15 @@ const usePrismaAuthState = async (sessionId) => {
                                 const strVal = JSON.stringify(value, BufferJSON.replacer);
                                 cache.set(`${sessionId}-${key}`, strVal);
                                 // Queue DB update
-                                tasks.push(writeData(value, key));
+                                dbWriteQueue.push(() => writeData(value, key));
                             } else {
                                 cache.delete(`${sessionId}-${key}`);
-                                tasks.push(removeData(key));
+                                dbWriteQueue.push(() => removeData(key));
                             }
                         }
                     }
-                    // Run DB updates asynchronously without blocking Baileys
-                    Promise.all(tasks).catch(e => console.error("Batch DB save error:", e));
+                    // Process queue asynchronously without blocking Baileys
+                    processQueue();
                 }
             }
         },
