@@ -1,5 +1,6 @@
 import makeWASocket, { DisconnectReason, BufferJSON, initAuthCreds, proto } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import pino from 'pino';
 import fs from 'fs';
 import { prisma } from '../../lib/prisma.ts';
@@ -142,8 +143,13 @@ export const initWhatsApp = async () => {
             if (qr) {
                 console.log('\n--- NEELGIRI SCHOOL SYSTEM: SCAN THIS QR CODE ---');
                 qrcode.generate(qr, { small: true });
-                // Use a free public QR code generator API to convert the raw QR token to an image URL
-                qrCodeData = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+                // Generate base64 Data URL instantly to prevent scanning timeout issues
+                QRCode.toDataURL(qr).then(url => {
+                    qrCodeData = url;
+                }).catch(e => {
+                    console.error("Local QR generation failed, falling back to API", e);
+                    qrCodeData = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+                });
                 isConnected = false;
                 connectionInfo = null;
             }
