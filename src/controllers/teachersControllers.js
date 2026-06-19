@@ -1,6 +1,6 @@
 import {prisma} from '../../lib/prisma.ts'
 import bcrypt from 'bcryptjs';
-import { sendOtpEmail } from '../services/emailService.js';
+import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
 import jwt from "jsonwebtoken";
 import cloudinary, { cloud1Config, cloud2Config } from '../../config/cloudinaryImage.js'
 import generateToken from '../services/generateToken.js';
@@ -12,10 +12,10 @@ let useFirstTeacherCloud = true;
 const TeacherSingup = async (req, res) => {
     
     try {
-        const {name, email, password} = req.body;
+        const {name, email} = req.body;
 
-        if(!name || !email || !password){
-            return res.status(400).json({message: "All fields are required"});
+        if(!name || !email){
+            return res.status(400).json({message: "Name and email are required"});
         }
 
         // check if the teacher is in the database only then authorize the teacher to login
@@ -32,15 +32,8 @@ const TeacherSingup = async (req, res) => {
             })
         }
 
-        if(existingTeacher.password){
-            return res.status(400).json({
-                message: "you are already registered and verified as a teacher please login"
-            })
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
         
-        existingTeacher.password = hashedPassword;
+
         existingTeacher.name = name;
         existingTeacher.isVerified = false; // Set to false until OTP verification
 
@@ -92,6 +85,8 @@ const addTeacher = async (req, res) => {
                 isVerified: true
             }
         });
+
+        await sendWelcomeEmail(email, name);
 
         res.status(201).json({message: "Teacher added successfully", teacher: newTeacher});
         
@@ -159,7 +154,7 @@ const varifyOtp = async (req, res) => {
 }
 
 const completeProfile = async (req, res) => {
-    const {subject,qualification,bio} = req.body;
+    const {subject,qualification,bio,password} = req.body;
     const {email} = req.user; 
 
     try {
@@ -206,6 +201,11 @@ const completeProfile = async (req, res) => {
         teacher.subject = subject;
         teacher.qualification = qualification;
         teacher.bio = bio;
+        
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 10);
+            teacher.password = hashedPassword;
+        }
 
         const { id: tId, createdAt, ...updateDataProfile } = teacher;
 

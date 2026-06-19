@@ -36,6 +36,40 @@ async function sendOtpEmail(toEmail, otp) {
   }
 }
 
+const website_link = 'https://neelgiripublicschool.in';
+async function sendWelcomeEmail(toEmail, name) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'NPS Welcome<no-reply@neelgiripublicschool.in>', 
+      to: [toEmail],
+      subject: 'Welcome to Neelgiri Public School',
+      html: `
+       <div style="font-family: sans-serif; padding: 20px; color: #333;">
+  <h2>Welcome to Neelgiri Public School!</h2>
+  <p>Hello ${name},</p>
+  <p>You have been successfully added as a <strong>Teacher</strong> in our ERP system. We are excited to have you on board!</p>
+  <p><strong>Please register your account</strong> on our portal to get started.</p>
+  <p>Website Link: <a href="${website_link}/auth/register" style="color: #0056b3;">${website_link}/auth/register</a></p>
+  <p>If you have any questions or need assistance, feel free to reach out to us at <a href="mailto:developer@neelgiripublicschool.in" style="color: #0056b3;">developer@neelgiripublicschool.in</a>.</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin-top: 20px;" />
+  <p style="font-size: 12px; color: #777;">Neelgiri Public School</p>
+</div>
+      `,
+    });
+
+    if (error) {
+      console.error('Resend API Error:', error);
+      throw new Error(error.message || 'Failed to send welcome email.');
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error in sendWelcomeEmail service:', err);
+    throw err;
+  }
+}
+
+
 async function sendContectUsEmail(sender,phoneNumber,email,message){
  try {
     const { data, error } = await resend.emails.send({
@@ -67,4 +101,4 @@ async function sendContectUsEmail(sender,phoneNumber,email,message){
 }
 
 
-export { sendOtpEmail, sendContectUsEmail };
+export { sendOtpEmail, sendContectUsEmail , sendWelcomeEmail};
