@@ -51,7 +51,8 @@ const setStationFee = async (req, res) => {
 const getStudentsByStation = async (req, res) => {
   try {
     const students = await prisma.student.findMany({
-      select: { id: true, name: true, studentClass: true, cardNo: true, station: true }
+      select: { id: true, name: true,  cardNo: true, station: true },
+      
     });
 
     const stationsDB = await prisma.transportFee.findMany({ select: { station: true } });
