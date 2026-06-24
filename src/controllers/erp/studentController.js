@@ -19,6 +19,7 @@ const addStudent = async (req, res) => {
       admissionDate, 
       fatherName, 
       motherName, 
+      dob,
       cardNo, 
       contactNo, 
       station,
@@ -130,6 +131,7 @@ const addStudent = async (req, res) => {
           fatherName: fatherName || "",
           motherName: motherName || "",
           dateOfAdmission: startDate,
+          dob: dob ? new Date(dob) : null,
           cardNo,
           contactNo,
           station: station || null,
@@ -599,4 +601,133 @@ const updateStudentFeeStructure = async (req, res) => {
   }
 };
 
-export { addStudent, getStudents, getStudentFees, getFeeStats, updateStudentFeeStructure };
+const updateStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const {
+      name,
+      className,
+      admissionDate,
+      fatherName,
+      motherName,
+      dob,
+      cardNo,
+      contactNo,
+      station,
+      sessionYear
+    } = req.body;
+
+    const existing = await prisma.student.findUnique({
+      where: { id: studentId }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (fatherName !== undefined) updateData.fatherName = fatherName;
+    if (motherName !== undefined) updateData.motherName = motherName;
+    if (contactNo !== undefined) updateData.contactNo = contactNo;
+    if (station !== undefined) updateData.station = station || null;
+    
+    if (admissionDate !== undefined) {
+      updateData.dateOfAdmission = new Date(admissionDate);
+    }
+    if (dob !== undefined) {
+      updateData.dob = dob ? new Date(dob) : null;
+    }
+
+    if (className !== undefined) {
+      const targetClass = await prisma.class.findUnique({
+        where: { className }
+      });
+      if (!targetClass) {
+        return res.status(404).json({ success: false, message: `Class '${className}' not found.` });
+      }
+      updateData.classId = targetClass.id;
+    }
+
+    if (sessionYear !== undefined) {
+      let formattedSessionYear = sessionYear;
+      if (sessionYear && sessionYear.includes("-")) {
+        const parts = sessionYear.split("-");
+        if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4) {
+          formattedSessionYear = `${parts[0]}-${parts[1].substring(2)}`;
+        }
+      }
+      const targetSession = await prisma.session.findUnique({
+        where: { year: formattedSessionYear }
+      });
+      if (!targetSession) {
+        return res.status(404).json({ success: false, message: `Session '${sessionYear}' not found.` });
+      }
+      updateData.sessionId = targetSession.id;
+    }
+
+    if (cardNo !== undefined && cardNo !== existing.cardNo) {
+      updateData.cardNo = cardNo;
+    }
+
+    const updatedStudent = await prisma.student.update({
+      where: { id: studentId },
+      data: updateData,
+      include: {
+        studentclass: true,
+        session: true
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Student information updated successfully",
+      student: updatedStudent
+    });
+  } catch (error) {
+    console.error("Error in updateStudent:", error);
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        success: false, 
+        message: "This Card Number is already assigned to another student in this specific session." 
+      });
+    }
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
+const deleteStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    const existing = await prisma.student.findUnique({
+      where: { id: studentId }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated fee automation logs
+      await tx.feeAutomationLog.deleteMany({
+        where: { studentId }
+      });
+
+      // 2. Delete student record. Database cascades will clean up feeStructures and payments automatically.
+      await tx.student.delete({
+        where: { id: studentId }
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Student and all associated records deleted successfully."
+    });
+  } catch (error) {
+    console.error("Error in deleteStudent:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
+export { addStudent, getStudents, getStudentFees, getFeeStats, updateStudentFeeStructure, updateStudent, deleteStudent };

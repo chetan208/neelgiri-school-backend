@@ -180,6 +180,7 @@ model Student {
   fatherName      String
   motherName      String?
   dateOfAdmission DateTime?
+  dob             DateTime?
   cardNo          String
   contactNo       String
   station         String?

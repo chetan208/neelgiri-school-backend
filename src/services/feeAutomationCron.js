@@ -3,14 +3,14 @@ import { prisma } from '../../lib/prisma.ts';
 import { sendWhatsAppMessage } from './whatsappService.js';
 import { ensureStudentFeeForMonth } from './feeService.js';
 
-export const runFeeAutomation = async () => {
+export const runFeeAutomation = async (ignoreWindow = false) => {
   try {
-    console.log('--- Fee Automation Cron Started ---');
+    console.log(`--- Fee Automation Cron Started (ignoreWindow: ${ignoreWindow}) ---`);
     const settings = await prisma.feeAutomationSetting.findUnique({
       where: { id: "singleton" }
     });
 
-    if (!settings || !settings.isEnabled) {
+    if (!ignoreWindow && (!settings || !settings.isEnabled)) {
       console.log('Fee automation is disabled or not configured.');
       return;
     }
@@ -18,11 +18,11 @@ export const runFeeAutomation = async () => {
     const today = new Date();
     const currentDay = today.getDate();
     
-    const dayDiff = currentDay - settings.startDay;
+    const dayDiff = currentDay - (settings?.startDay ?? 1);
     
     // Check if we are within the processing window
-    if (dayDiff < 0 || dayDiff >= settings.windowDays) {
-      console.log(`Current day ${currentDay} is outside the active window (Start: ${settings.startDay}, Window: ${settings.windowDays} days).`);
+    if (!ignoreWindow && (dayDiff < 0 || dayDiff >= (settings?.windowDays ?? 3))) {
+      console.log(`Current day ${currentDay} is outside the active window (Start: ${settings?.startDay ?? 1}, Window: ${settings?.windowDays ?? 3} days).`);
       return;
     }
 
@@ -41,21 +41,6 @@ export const runFeeAutomation = async () => {
       return;
     }
 
-    // Expected proportion for today
-    const expectedProcessedCount = Math.ceil(totalStudents * ((dayDiff + 1) / settings.windowDays));
-
-    const alreadyProcessed = await prisma.feeAutomationLog.count({
-      where: { monthStr: currentMonthStr }
-    });
-
-    const numberToProcessToday = expectedProcessedCount - alreadyProcessed;
-    if (numberToProcessToday <= 0) {
-      console.log(`Already processed expected quota for today. Total so far: ${alreadyProcessed}/${totalStudents}`);
-      return;
-    }
-
-    console.log(`Processing up to ${numberToProcessToday} students today.`);
-
     const logs = await prisma.feeAutomationLog.findMany({
       where: { monthStr: currentMonthStr },
       select: { studentId: true }
@@ -68,6 +53,23 @@ export const runFeeAutomation = async () => {
     });
 
     const pendingStudents = allStudents.filter(s => !processedIds.has(s.id));
+
+    let numberToProcessToday = 0;
+    if (ignoreWindow) {
+      numberToProcessToday = pendingStudents.length;
+    } else {
+      const alreadyProcessed = processedIds.size;
+      const windowDays = settings?.windowDays ?? 3;
+      const expectedProcessedCount = Math.ceil(totalStudents * ((dayDiff + 1) / windowDays));
+      numberToProcessToday = expectedProcessedCount - alreadyProcessed;
+    }
+
+    if (numberToProcessToday <= 0) {
+      console.log(`Already processed expected quota. Total so far: ${processedIds.size}/${totalStudents}`);
+      return;
+    }
+
+    console.log(`Processing up to ${numberToProcessToday} students.`);
     const processCount = Math.min(numberToProcessToday, pendingStudents.length);
 
     for (let i = 0; i < processCount; i++) {

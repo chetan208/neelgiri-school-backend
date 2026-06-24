@@ -4,7 +4,9 @@ import {
   getStudents, 
   getStudentFees, 
   getFeeStats,
-  updateStudentFeeStructure
+  updateStudentFeeStructure,
+  updateStudent,
+  deleteStudent
 } from "../../controllers/erp/studentController.js";
 import { checkOwnerMiddleware } from "../../middlewares/authMiddleware.js";
 
@@ -15,5 +17,7 @@ router.get("/students", checkOwnerMiddleware, getStudents);
 router.get("/students/:studentId/fees", checkOwnerMiddleware, getStudentFees);
 router.get("/fees/stats", checkOwnerMiddleware, getFeeStats);
 router.put("/students/fees/:feeId", checkOwnerMiddleware, updateStudentFeeStructure);
+router.put("/students/:studentId", checkOwnerMiddleware, updateStudent);
+router.delete("/students/:studentId", checkOwnerMiddleware, deleteStudent);
 
 export default router;

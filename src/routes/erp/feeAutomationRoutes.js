@@ -1,8 +1,11 @@
 import express from "express";
 import { prisma } from "../../../lib/prisma.ts";
 import { checkOwnerMiddleware } from "../../middlewares/authMiddleware.js";
+import { runFeeAutomation } from "../../services/feeAutomationCron.js";
 
 const router = express.Router();
+
+let isManualAutomationRunning = false;
 
 router.get("/settings", async (req, res) => {
   try {
@@ -83,6 +86,45 @@ router.get("/logs", checkOwnerMiddleware, async (req, res) => {
     console.error("Error fetching automation logs:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
+});
+
+router.post("/trigger", checkOwnerMiddleware, async (req, res) => {
+  try {
+    if (isManualAutomationRunning) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Manual fee automation is already running in the background." 
+      });
+    }
+
+    isManualAutomationRunning = true;
+
+    // Execute the automation asynchronously in the background
+    (async () => {
+      try {
+        console.log("=== Manually Triggered Fee Automation Starting ===");
+        await runFeeAutomation(true); // ignoreWindow = true
+      } catch (err) {
+        console.error("Error running manual fee automation:", err);
+      } finally {
+        isManualAutomationRunning = false;
+        console.log("=== Manually Triggered Fee Automation Finished ===");
+      }
+    })();
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Fee automation triggered successfully. It will run in the background." 
+    });
+  } catch (error) {
+    console.error("Error triggering manual fee automation:", error);
+    isManualAutomationRunning = false;
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+router.get("/status", checkOwnerMiddleware, (req, res) => {
+  res.status(200).json({ success: true, isRunning: isManualAutomationRunning });
 });
 
 export default router;
