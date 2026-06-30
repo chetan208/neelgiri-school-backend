@@ -11,6 +11,81 @@ const formatMonthYear = (date) => {
   return `${monthNames[date.getMonth()]}-${date.getFullYear()}`;
 };
 
+const CLASS_PROGRESSION = {
+  "Nursery": "LKG",
+  "LKG": "UKG",
+  "UKG": "1st",
+  "1st": "2nd",
+  "2nd": "3rd",
+  "3rd": "4th",
+  "4th": "5th",
+  "5th": "6th",
+  "6th": "7th",
+  "7th": "8th",
+  "8th": "9th",
+  "9th": "10th",
+  "10th": "11th",
+  "11th": "12th"
+};
+
+const getNextSessionYear = (currentYear) => {
+  const parts = currentYear.split("-");
+  if (parts.length === 2) {
+    const startYear = parseInt(parts[0]);
+    const endYearShort = parseInt(parts[1]);
+    const nextStartYear = startYear + 1;
+    const nextEndYearShort = endYearShort + 1;
+    const nextEndYearShortStr = String(nextEndYearShort).padStart(2, '0').slice(-2);
+    return `${nextStartYear}-${nextEndYearShortStr}`;
+  }
+  const yearNum = parseInt(currentYear);
+  if (!isNaN(yearNum)) {
+    return `${yearNum + 1}`;
+  }
+  return currentYear;
+};
+
+const getClassRollNoBase = (className) => {
+  if (className === "Nursery") return 1;
+  if (className === "LKG") return 31;
+  if (className === "UKG") return 61;
+  
+  const match =  className.match(/(\d+)/);
+  if (match) {
+    const classNum = parseInt(match[1]);
+    return classNum * 100 + 1; // Class 1 -> 101, Class 2 -> 201, Class 12 -> 1201
+  }
+  
+  return 10001; // fallback
+};
+
+const generateNextRollNo = async (className, sessionId, tx) => {
+  const base = getClassRollNoBase(className);
+  const prismaClient = tx || prisma;
+  
+  const targetClass = await prismaClient.class.findUnique({
+    where: { className }
+  });
+  
+  if (!targetClass) return String(base);
+  
+  const students = await prismaClient.student.findMany({
+    where: {
+      classId: targetClass.id,
+      sessionId
+    },
+    select: { cardNo: true }
+  });
+  
+  const rollNumbers = students
+    .map(s => parseInt(s.cardNo))
+    .filter(num => !isNaN(num));
+    
+  const maxRoll = rollNumbers.length > 0 ? Math.max(...rollNumbers) : 0;
+  const nextRoll = maxRoll >= base ? maxRoll + 1 : base;
+  return String(nextRoll);
+};
+
 const addStudent = async (req, res) => {
   try {
     const { 
@@ -29,10 +104,10 @@ const addStudent = async (req, res) => {
     } = req.body;
 
     // 1. Validation Check
-    if (!name || !className || !admissionDate || !cardNo || !contactNo || !sessionYear) {
+    if (!name || !className || !admissionDate || !contactNo || !sessionYear) {
       return res.status(400).json({ 
         success: false, 
-        message: "Missing required fields (Name, className, admissionDate, cardNo, contactNo, sessionYear)" 
+        message: "Missing required fields (Name, className, admissionDate, contactNo, sessionYear)" 
       });
     }
 
@@ -124,6 +199,11 @@ const addStudent = async (req, res) => {
     // 6. Database Transaction
     const result = await prisma.$transaction(async (tx) => {
       
+      // Auto-generate cardNo (roll number) if not provided
+      const finalCardNo = (cardNo && cardNo.trim() !== "") 
+        ? cardNo.trim() 
+        : await generateNextRollNo(className, targetSession.id, tx);
+
       // A. Create Student
       const newStudent = await tx.student.create({
         data: {
@@ -132,7 +212,7 @@ const addStudent = async (req, res) => {
           motherName: motherName || "",
           dateOfAdmission: startDate,
           dob: dob ? new Date(dob) : null,
-          cardNo,
+          cardNo: finalCardNo,
           contactNo,
           station: station || null,
           classId: targetClass.id,
@@ -535,7 +615,8 @@ const updateStudentFeeStructure = async (req, res) => {
       ptmFine,
       tieBeltBooks,
       buildingFund,
-      annualCharges
+      annualCharges,
+      previousSessionDues
     } = req.body;
 
     const existing = await prisma.feeStructure.findUnique({
@@ -562,8 +643,9 @@ const updateStudentFeeStructure = async (req, res) => {
     const nTieBelt = parseSafe(tieBeltBooks, existing.tieBeltBooks);
     const nBuilding = parseSafe(buildingFund, existing.buildingFund);
     const nAnnual = parseSafe(annualCharges, existing.annualCharges);
+    const nPrevDues = parseSafe(previousSessionDues, existing.previousSessionDues);
 
-    const newTotal = Math.round((nAdmission + nTuition + nBus + nExam + nComputer + nPtm + nTieBelt + nBuilding + nAnnual) * 100) / 100;
+    const newTotal = Math.round((nAdmission + nTuition + nBus + nExam + nComputer + nPtm + nTieBelt + nBuilding + nAnnual + nPrevDues) * 100) / 100;
     const totalPaid = existing.payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
 
     let newStatus = "PENDING";
@@ -585,6 +667,7 @@ const updateStudentFeeStructure = async (req, res) => {
         tieBeltBooks: nTieBelt,
         buildingFund: nBuilding,
         annualCharges: nAnnual,
+        previousSessionDues: nPrevDues,
         total: newTotal,
         status: newStatus
       }
@@ -696,6 +779,201 @@ const updateStudent = async (req, res) => {
   }
 };
 
+const promoteStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // 1. Fetch current student details
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { studentclass: true, session: true }
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    const currentClassName = student.studentclass.className;
+    const nextClassName = CLASS_PROGRESSION[currentClassName];
+
+    if (!nextClassName) {
+      return res.status(400).json({
+        success: false,
+        message: `Promotion is not applicable for class '${currentClassName}' (highest class level).`
+      });
+    }
+
+    // 2. Find target class
+    const targetClass = await prisma.class.findUnique({
+      where: { className: nextClassName }
+    });
+
+    if (!targetClass) {
+      return res.status(404).json({
+        success: false,
+        message: `Target class '${nextClassName}' does not exist in the database.`
+      });
+    }
+
+    // 3. Calculate next session
+    const currentSessionYear = student.session.year;
+    const nextSessionYear = getNextSessionYear(currentSessionYear);
+
+    // 4. Find or create next session (outside transaction to avoid lock contention)
+    let targetSession = await prisma.session.findUnique({
+      where: { year: nextSessionYear }
+    });
+
+    if (!targetSession) {
+      targetSession = await prisma.session.create({
+        data: { year: nextSessionYear }
+      });
+    }
+
+    // 5. Check if student is already promoted (outside transaction)
+    const alreadyPromoted = await prisma.student.findFirst({
+      where: {
+        name: student.name,
+        fatherName: student.fatherName,
+        dob: student.dob,
+        sessionId: targetSession.id
+      }
+    });
+
+    if (alreadyPromoted) {
+      return res.status(400).json({
+        success: false,
+        message: `Student '${student.name}' is already promoted/registered in session ${nextSessionYear}.`
+      });
+    }
+
+    // 6. Calculate total remaining balance of the student in the current session
+    const currentFeeStructures = await prisma.feeStructure.findMany({
+      where: { studentId },
+      include: { payments: true }
+    });
+
+    let totalDues = 0;
+    for (const fs of currentFeeStructures) {
+      const total = parseFloat(fs.total || 0);
+      const paid = fs.payments?.reduce((sum, p) => sum + parseFloat(p.amountPaid || 0), 0) || 0;
+      const rem = Math.round((total - paid) * 100) / 100;
+      if (rem > 0) {
+        totalDues = Math.round((totalDues + rem) * 100) / 100;
+      }
+    }
+
+    console.log(`Calculated previous session remaining balance: Rs. ${totalDues}`);
+
+    // 7. Pre-fetch details needed for fee generation (outside transaction)
+    const monthlyFees = await prisma.classMonthlyFee.findMany({
+      where: { className: targetClass.className }
+    });
+
+    let busCharges = 0;
+    if (student.station) {
+      const transport = await prisma.transportFee.findUnique({ where: { station: student.station } });
+      if (transport) busCharges = parseFloat(transport.amount);
+    }
+
+    // Generate roll number (outside transaction)
+    const cardNo = await generateNextRollNo(nextClassName, targetSession.id);
+
+    // 8. Run database transaction with custom options (generous timeout options)
+    const result = await prisma.$transaction(async (tx) => {
+      // Set target session's start date
+      const startYear = parseInt(nextSessionYear.split("-")[0]);
+      const nextSessionStartDate = new Date(startYear, 3, 1); // April
+
+      // Create new Student record
+      const promotedStudent = await tx.student.create({
+        data: {
+          name: student.name,
+          fatherName: student.fatherName,
+          motherName: student.motherName || "",
+          dateOfAdmission: nextSessionStartDate,
+          dob: student.dob,
+          cardNo,
+          contactNo: student.contactNo,
+          station: student.station || null,
+          classId: targetClass.id,
+          sessionId: targetSession.id
+        }
+      });
+
+      // Generate monthly fee structures
+      const startDate = nextSessionStartDate;
+      const endDate = new Date();
+      
+      let currentLoopDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      const endLoopDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      
+      const loopLimit = currentLoopDate > endLoopDate ? currentLoopDate : endLoopDate;
+
+      const monthNames = [
+        "January", "February", "March", "April", "May", "June", 
+        "July", "August", "September", "October", "November", "December"
+      ];
+
+      let isFirstMonth = true;
+
+      for (let d = new Date(currentLoopDate); d <= loopLimit; d.setMonth(d.getMonth() + 1)) {
+        const monthStr = formatMonthYear(d);
+        const monthName = monthNames[d.getMonth()];
+        const monthlyFeeConfig = monthlyFees.find(f => f.monthName === monthName);
+
+        const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0;
+        const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0;
+        const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0;
+        const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(targetClass.tieBeltBooks) || 0;
+        const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(targetClass.ptmFine) || 0;
+        const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(targetClass.buildingFund) || 0;
+        const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
+
+        const currentAdmissionFee = 0;
+        const currentPreviousSessionDues = isFirstMonth ? totalDues : 0;
+        isFirstMonth = false;
+
+        const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges + currentPreviousSessionDues;
+
+        await tx.feeStructure.create({
+          data: {
+            studentId: promotedStudent.id,
+            month: monthStr,
+            studentClass: targetClass.className,
+            admissionFee: currentAdmissionFee,
+            tuitionFee,
+            examFee,
+            computerFee,
+            tieBeltBooks,
+            ptmFine,
+            buildingFund,
+            annualCharges,
+            schoolBusCharges: busCharges,
+            previousSessionDues: currentPreviousSessionDues,
+            total: totalDemand,
+            status: "PENDING"
+          }
+        });
+      }
+
+      return promotedStudent;
+    }, {
+      maxWait: 15000,
+      timeout: 30000
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Student promoted successfully to class ${nextClassName} for session ${nextSessionYear}. Remaining balance of Rs. ${totalDues} has been added.`,
+      student: result
+    });
+  } catch (error) {
+    console.error("Error in promoteStudent:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error" });
+  }
+};
+
 const deleteStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -730,4 +1008,4 @@ const deleteStudent = async (req, res) => {
   }
 };
 
-export { addStudent, getStudents, getStudentFees, getFeeStats, updateStudentFeeStructure, updateStudent, deleteStudent };
+export { addStudent, getStudents, getStudentFees, getFeeStats, updateStudentFeeStructure, updateStudent, deleteStudent, promoteStudent };
