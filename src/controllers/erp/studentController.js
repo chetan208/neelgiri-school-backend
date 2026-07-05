@@ -1008,4 +1008,12 @@ const deleteStudent = async (req, res) => {
   }
 };
 
-export { addStudent, getStudents, getStudentFees, getFeeStats, updateStudentFeeStructure, updateStudent, deleteStudent, promoteStudent };
+export { 
+  addStudent, 
+  getStudents, 
+  getStudentFees, 
+  getFeeStats, 
+  updateStudentFeeStructure, 
+  updateStudent, deleteStudent, 
+  promoteStudent 
+};
