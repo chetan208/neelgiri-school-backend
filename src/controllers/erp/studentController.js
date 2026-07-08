@@ -100,7 +100,8 @@ const addStudent = async (req, res) => {
       station,
       sessionYear,
       initialAmountPaid, // Frontend se aaya shuruati deposit (e.g., 5000)
-      paymentMode        // CASH ya UPI
+      paymentMode,       // CASH ya UPI
+      previousSessionDues
     } = req.body;
 
     // 1. Validation Check
@@ -172,7 +173,8 @@ const addStudent = async (req, res) => {
       const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
 
       const currentAdmissionFee = (feeStructuresToCreate.length === 0) ? admissionFee : 0;
-      const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges;
+      const currentPreviousSessionDues = (feeStructuresToCreate.length === 0) ? (parseFloat(previousSessionDues || "0") || 0) : 0;
+      const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges + currentPreviousSessionDues;
 
       feeStructuresToCreate.push({
         month: monthStr,
@@ -186,6 +188,7 @@ const addStudent = async (req, res) => {
         buildingFund,
         annualCharges,
         schoolBusCharges: busCharges,
+        previousSessionDues: currentPreviousSessionDues,
         total: totalDemand,
         status: "PENDING"
       });
@@ -253,6 +256,7 @@ const addStudent = async (req, res) => {
             buildingFund: feeData.buildingFund,
             annualCharges: feeData.annualCharges,
             schoolBusCharges: feeData.schoolBusCharges,
+            previousSessionDues: feeData.previousSessionDues,
             total: feeData.total,
             status: finalStatus
           }

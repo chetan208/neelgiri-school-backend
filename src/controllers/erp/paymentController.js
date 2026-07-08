@@ -3,7 +3,7 @@ import { sendWhatsAppMessage } from "../../services/whatsappService.js";
 
 const makePayment = async (req, res) => {
   try {
-    const { studentId, amountPaid, paymentMode } = req.body;
+    const { studentId, amountPaid, paymentMode, feeStructureId } = req.body;
 
     // 1. Validation Check
     if (!studentId || amountPaid === undefined || !paymentMode) {
@@ -18,26 +18,37 @@ const makePayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Payment amount must be a valid number greater than 0" });
     }
 
-    // 2. Student ke saare unpaid/partially paid records nikalna (Oldest First)
-    let unpaidRecords = await prisma.feeStructure.findMany({
-      where: {
-        studentId: studentId,
-        status: { in: ["PENDING", "PARTIALLY_PAID"] }
+    // 2. Fetch target unpaid records (specific month or all unpaid FIFO)
+    let unpaidRecords = [];
+    if (feeStructureId) {
+      const specificRecord = await prisma.feeStructure.findUnique({
+        where: { id: feeStructureId }
+      });
+      if (!specificRecord || specificRecord.studentId !== studentId) {
+        return res.status(404).json({ success: false, message: "Specified fee structure not found for this student." });
       }
-    });
+      unpaidRecords = [specificRecord];
+    } else {
+      unpaidRecords = await prisma.feeStructure.findMany({
+        where: {
+          studentId: studentId,
+          status: { in: ["PENDING", "PARTIALLY_PAID"] }
+        }
+      });
+      
+      // Helper: Month string ko date me convert krke sort krne ke liye
+      const parseMonthStr = (str) => {
+        const [mName, year] = str.split("-");
+        return new Date(`${mName} 1, ${year}`);
+      };
+
+      // Purane mahine sabse pehle (FIFO Sorting)
+      unpaidRecords.sort((a, b) => parseMonthStr(a.month) - parseMonthStr(b.month));
+    }
 
     if (unpaidRecords.length === 0) {
       return res.status(400).json({ success: false, message: "No pending or unpaid fees found for this student." });
     }
-
-    // Helper: Month string ko date me convert krke sort krne ke liye
-    const parseMonthStr = (str) => {
-      const [mName, year] = str.split("-");
-      return new Date(`${mName} 1, ${year}`);
-    };
-
-    // Purane mahine sabse pehle (FIFO Sorting)
-    unpaidRecords.sort((a, b) => parseMonthStr(a.month) - parseMonthStr(b.month));
 
     const processedPayments = [];
 
@@ -166,8 +177,9 @@ const makePayment = async (req, res) => {
         let whatsappMsg = `Dear Parent,\n\n`;
         whatsappMsg += `We have received a fee payment of ₹${parseFloat(amountPaid).toFixed(2)} (via ${paymentMode}) for student ${student.name} (Card No: ${student.cardNo}).\n\n`;
         
-        if (latestFeeStructureId) {
-          whatsappMsg += `View/Print Digital Invoice: ${process.env.FRONTEND_URL}/receipt/${latestFeeStructureId}\n\n`;
+        const invoiceId = feeStructureId || latestFeeStructureId;
+        if (invoiceId) {
+          whatsappMsg += `View/Print Digital Invoice: ${process.env.FRONTEND_URL}/receipt/${invoiceId}\n\n`;
         }
 
         if (totalRemaining > 0) {
