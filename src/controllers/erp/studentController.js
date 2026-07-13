@@ -45,10 +45,17 @@ const getNextSessionYear = (currentYear) => {
   return currentYear;
 };
 
+const getClassRollNoPrefix = (className) => {
+  if (className === "Nursery") return "NUR-";
+  if (className === "LKG") return "LKG-";
+  if (className === "UKG") return "UKG-";
+  return null;
+};
+
 const getClassRollNoBase = (className) => {
   if (className === "Nursery") return 1;
-  if (className === "LKG") return 31;
-  if (className === "UKG") return 61;
+  if (className === "LKG") return 1;
+  if (className === "UKG") return 1;
   
   const match =  className.match(/(\d+)/);
   if (match) {
@@ -60,14 +67,17 @@ const getClassRollNoBase = (className) => {
 };
 
 const generateNextRollNo = async (className, sessionId, tx) => {
-  const base = getClassRollNoBase(className);
+  const prefix = getClassRollNoPrefix(className);
   const prismaClient = tx || prisma;
   
   const targetClass = await prismaClient.class.findUnique({
     where: { className }
   });
   
-  if (!targetClass) return String(base);
+  if (!targetClass) {
+    if (prefix) return `${prefix}01`;
+    return String(getClassRollNoBase(className));
+  }
   
   const students = await prismaClient.student.findMany({
     where: {
@@ -76,14 +86,32 @@ const generateNextRollNo = async (className, sessionId, tx) => {
     },
     select: { cardNo: true }
   });
-  
-  const rollNumbers = students
-    .map(s => parseInt(s.cardNo))
-    .filter(num => !isNaN(num));
-    
-  const maxRoll = rollNumbers.length > 0 ? Math.max(...rollNumbers) : 0;
-  const nextRoll = maxRoll >= base ? maxRoll + 1 : base;
-  return String(nextRoll);
+
+  if (prefix) {
+    const suffixes = students
+      .map(s => {
+        if (s.cardNo && s.cardNo.startsWith(prefix)) {
+          const suffixStr = s.cardNo.substring(prefix.length);
+          const num = parseInt(suffixStr);
+          return isNaN(num) ? null : num;
+        }
+        return null;
+      })
+      .filter(num => num !== null);
+
+    const maxSuffix = suffixes.length > 0 ? Math.max(...suffixes) : 0;
+    const nextSuffix = maxSuffix + 1;
+    return `${prefix}${String(nextSuffix).padStart(2, '0')}`;
+  } else {
+    const base = getClassRollNoBase(className);
+    const rollNumbers = students
+      .map(s => parseInt(s.cardNo))
+      .filter(num => !isNaN(num));
+      
+    const maxRoll = rollNumbers.length > 0 ? Math.max(...rollNumbers) : 0;
+    const nextRoll = maxRoll >= base ? maxRoll + 1 : base;
+    return String(nextRoll);
+  }
 };
 
 const addStudent = async (req, res) => {
@@ -101,7 +129,13 @@ const addStudent = async (req, res) => {
       sessionYear,
       initialAmountPaid, // Frontend se aaya shuruati deposit (e.g., 5000)
       paymentMode,       // CASH ya UPI
-      previousSessionDues
+      previousSessionDues,
+      discountTuition,
+      discountBus,
+      discountAdmission,
+      discountAnnual,
+      discountExam,
+      discountComputer
     } = req.body;
 
     // 1. Validation Check
@@ -158,23 +192,32 @@ const addStudent = async (req, res) => {
 
     const feeStructuresToCreate = [];
 
+    // Parse student-specific discounts (defaulting to 0)
+    const tuitionDiscount = parseFloat(discountTuition || 0) || 0;
+    const busDiscount = parseFloat(discountBus || 0) || 0;
+    const admissionDiscount = parseFloat(discountAdmission || 0) || 0;
+    const annualDiscount = parseFloat(discountAnnual || 0) || 0;
+    const examDiscount = parseFloat(discountExam || 0) || 0;
+    const computerDiscount = parseFloat(discountComputer || 0) || 0;
+
     while (currentLoopDate <= endLoopDate) {
       const monthStr = formatMonthYear(currentLoopDate);
       const monthName = monthNames[currentLoopDate.getMonth()];
       const monthlyFeeConfig = monthlyFees.find(f => f.monthName === monthName);
 
-      const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0;
-      const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0;
-      const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0;
-      const admissionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(targetClass.admissionFee) || 0;
+      const tuitionFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0) - tuitionDiscount);
+      const examFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0) - examDiscount);
+      const computerFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0) - computerDiscount);
+      const admissionFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(targetClass.admissionFee) || 0) - admissionDiscount);
       const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(targetClass.tieBeltBooks) || 0;
       const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(targetClass.ptmFine) || 0;
       const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(targetClass.buildingFund) || 0;
-      const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
+      const annualCharges = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0) - annualDiscount);
+      const schoolBusCharges = Math.max(0, busCharges - busDiscount);
 
       const currentAdmissionFee = (feeStructuresToCreate.length === 0) ? admissionFee : 0;
       const currentPreviousSessionDues = (feeStructuresToCreate.length === 0) ? (parseFloat(previousSessionDues || "0") || 0) : 0;
-      const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges + currentPreviousSessionDues;
+      const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + schoolBusCharges + currentPreviousSessionDues;
 
       feeStructuresToCreate.push({
         month: monthStr,
@@ -187,7 +230,7 @@ const addStudent = async (req, res) => {
         ptmFine,
         buildingFund,
         annualCharges,
-        schoolBusCharges: busCharges,
+        schoolBusCharges,
         previousSessionDues: currentPreviousSessionDues,
         total: totalDemand,
         status: "PENDING"
@@ -219,7 +262,13 @@ const addStudent = async (req, res) => {
           contactNo,
           station: station || null,
           classId: targetClass.id,
-          sessionId: targetSession.id
+          sessionId: targetSession.id,
+          discountTuition: tuitionDiscount,
+          discountBus: busDiscount,
+          discountAdmission: admissionDiscount,
+          discountAnnual: annualDiscount,
+          discountExam: examDiscount,
+          discountComputer: computerDiscount
         }
       });
 
@@ -392,7 +441,7 @@ const getStudents = async (req, res) => {
           studentclass: true,
           session: true
         },
-        orderBy: { name: "asc" }
+        orderBy: { cardNo: "asc" }
       }),
       prisma.student.count({ where })
     ]);
@@ -607,6 +656,161 @@ const getFeeStats = async (req, res) => {
   }
 };
 
+const getIncomeAnalysis = async (req, res) => {
+  try {
+    const { session } = req.query;
+    let targetSession = null;
+    if (session) {
+      let formattedSession = session;
+      if (session && session.includes("-")) {
+        const parts = session.split("-");
+        if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4) {
+          formattedSession = `${parts[0]}-${parts[1].substring(2)}`;
+        }
+      }
+      targetSession = await prisma.session.findUnique({ where: { year: formattedSession } });
+    } else {
+      targetSession = await prisma.session.findFirst({ orderBy: { year: 'desc' } });
+    }
+
+    if (!targetSession) {
+      return res.status(404).json({ success: false, message: "No active session found" });
+    }
+
+    const students = await prisma.student.findMany({
+      where: { sessionId: targetSession.id },
+      include: {
+        feeStructures: {
+          include: { payments: true }
+        },
+        studentclass: true
+      }
+    });
+
+    const monthsMap = {};
+    const monthOrder = ["April","May","June","July","August","September","October","November","December","January","February","March"];
+
+    const getMonthIndex = (monthStr) => {
+      const [mName] = monthStr.split("-");
+      return monthOrder.indexOf(mName);
+    };
+
+    const getYearNum = (monthStr) => {
+      const [, year] = monthStr.split("-");
+      return parseInt(year) || 0;
+    };
+
+    for (const student of students) {
+      const className = student.studentclass.className;
+
+      for (const fee of student.feeStructures) {
+        const monthStr = fee.month;
+        if (!monthsMap[monthStr]) {
+          monthsMap[monthStr] = {
+            month: monthStr,
+            totalDemand: 0,
+            totalPaid: 0,
+            totalPending: 0,
+            classes: {},
+            unpaidStudents: []
+          };
+        }
+
+        const mData = monthsMap[monthStr];
+        const demand = parseFloat(fee.total || 0);
+        const paid = fee.payments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
+        const pending = Math.max(0, Math.round((demand - paid) * 100) / 100);
+
+        mData.totalDemand = Math.round((mData.totalDemand + demand) * 100) / 100;
+        mData.totalPaid = Math.round((mData.totalPaid + paid) * 100) / 100;
+        mData.totalPending = Math.round((mData.totalPending + pending) * 100) / 100;
+
+        if (fee.status !== "PAID") {
+          mData.unpaidStudents.push({
+            id: student.id,
+            name: student.name,
+            cardNo: student.cardNo,
+            className,
+            contactNo: student.contactNo,
+            demand,
+            paid,
+            pending,
+            status: fee.status
+          });
+        }
+
+        if (!mData.classes[className]) {
+          mData.classes[className] = {
+            className,
+            demand: 0,
+            paid: 0,
+            pending: 0,
+            studentCount: 0,
+            paidCount: 0,
+            partialCount: 0,
+            pendingCount: 0
+          };
+        }
+
+        const cData = mData.classes[className];
+        cData.demand = Math.round((cData.demand + demand) * 100) / 100;
+        cData.paid = Math.round((cData.paid + paid) * 100) / 100;
+        cData.pending = Math.round((cData.pending + pending) * 100) / 100;
+        cData.studentCount += 1;
+
+        if (fee.status === "PAID") {
+          cData.paidCount += 1;
+        } else if (fee.status === "PARTIALLY_PAID") {
+          cData.partialCount += 1;
+        } else {
+          cData.pendingCount += 1;
+        }
+      }
+    }
+
+    const classOrder = ["Nursery", "LKG", "UKG", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
+    
+    const formattedData = Object.values(monthsMap).map(mData => {
+      const classesArr = Object.values(mData.classes).sort((a, b) => {
+        return classOrder.indexOf(a.className) - classOrder.indexOf(b.className);
+      });
+      
+      const sortedUnpaid = [...mData.unpaidStudents].sort((a, b) => {
+        const aNum = parseInt(a.cardNo);
+        const bNum = parseInt(b.cardNo);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return aNum - bNum;
+        }
+        return (a.cardNo || "").localeCompare(b.cardNo || "");
+      });
+
+      return {
+        ...mData,
+        classes: classesArr,
+        unpaidStudents: sortedUnpaid
+      };
+    });
+
+    formattedData.sort((a, b) => {
+      const yearA = getYearNum(a.month);
+      const yearB = getYearNum(b.month);
+      if (yearA !== yearB) {
+        return yearA - yearB;
+      }
+      return getMonthIndex(a.month) - getMonthIndex(b.month);
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: formattedData
+    });
+
+  } catch (error) {
+    console.error("Error in getIncomeAnalysis:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
 const updateStudentFeeStructure = async (req, res) => {
   try {
     const { feeId } = req.params;
@@ -688,6 +892,93 @@ const updateStudentFeeStructure = async (req, res) => {
   }
 };
 
+const syncPendingFeeStructures = async (studentId, tx = prisma) => {
+  // 1. Fetch student along with their class configurations and station info
+  const student = await tx.student.findUnique({
+    where: { id: studentId },
+    include: {
+      studentclass: true
+    }
+  });
+  if (!student) return;
+
+  const targetClass = student.studentclass;
+
+  // 2. Fetch monthly fee configurations for this class
+  const monthlyFees = await tx.classMonthlyFee.findMany({
+    where: { className: targetClass.className }
+  });
+
+  // 3. Transport charges
+  let busCharges = 0;
+  if (student.station) {
+    const transport = await tx.transportFee.findUnique({ where: { station: student.station } });
+    if (transport) busCharges = parseFloat(transport.amount);
+  }
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June", 
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  // 4. Fetch all PENDING fee structures for this student
+  const pendingStructures = await tx.feeStructure.findMany({
+    where: {
+      studentId,
+      status: "PENDING"
+    },
+    include: { payments: true }
+  });
+
+  // Parse discounts
+  const tuitionDiscount = parseFloat(student.discountTuition) || 0;
+  const busDiscount = parseFloat(student.discountBus) || 0;
+  const admissionDiscount = parseFloat(student.discountAdmission) || 0;
+  const annualDiscount = parseFloat(student.discountAnnual) || 0;
+  const examDiscount = parseFloat(student.discountExam) || 0;
+  const computerDiscount = parseFloat(student.discountComputer) || 0;
+
+  for (const fs of pendingStructures) {
+    const monthParts = fs.month.split("-");
+    const monthName = monthParts[0];
+    const monthlyFeeConfig = monthlyFees.find(f => f.monthName === monthName);
+
+    // standard tuition, exam, computer, etc. for this month
+    const stdTuition = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0;
+    const stdExam = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0;
+    const stdComputer = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0;
+    const stdAdmission = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(targetClass.admissionFee) || 0;
+    const stdAnnual = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
+    const stdTieBelt = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(targetClass.tieBeltBooks) || 0;
+    const stdPtm = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(targetClass.ptmFine) || 0;
+    const stdBuilding = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(targetClass.buildingFund) || 0;
+
+    // Apply discounts
+    const tuitionFee = Math.max(0, stdTuition - tuitionDiscount);
+    const examFee = Math.max(0, stdExam - examDiscount);
+    const computerFee = Math.max(0, stdComputer - computerDiscount);
+    const admissionFee = Math.max(0, stdAdmission - admissionDiscount);
+    const annualCharges = Math.max(0, stdAnnual - annualDiscount);
+    const schoolBusCharges = Math.max(0, busCharges - busDiscount);
+    const prevSessionDues = parseFloat(fs.previousSessionDues) || 0;
+
+    const total = admissionFee + tuitionFee + examFee + computerFee + stdTieBelt + stdPtm + stdBuilding + annualCharges + schoolBusCharges + prevSessionDues;
+
+    await tx.feeStructure.update({
+      where: { id: fs.id },
+      data: {
+        admissionFee,
+        tuitionFee,
+        examFee,
+        computerFee,
+        annualCharges,
+        schoolBusCharges,
+        total
+      }
+    });
+  }
+};
+
 const updateStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -701,7 +992,13 @@ const updateStudent = async (req, res) => {
       cardNo,
       contactNo,
       station,
-      sessionYear
+      sessionYear,
+      discountTuition,
+      discountBus,
+      discountAdmission,
+      discountAnnual,
+      discountExam,
+      discountComputer
     } = req.body;
 
     const existing = await prisma.student.findUnique({
@@ -757,13 +1054,38 @@ const updateStudent = async (req, res) => {
       updateData.cardNo = cardNo;
     }
 
-    const updatedStudent = await prisma.student.update({
-      where: { id: studentId },
-      data: updateData,
-      include: {
-        studentclass: true,
-        session: true
+    if (discountTuition !== undefined) updateData.discountTuition = parseFloat(discountTuition || 0) || 0;
+    if (discountBus !== undefined) updateData.discountBus = parseFloat(discountBus || 0) || 0;
+    if (discountAdmission !== undefined) updateData.discountAdmission = parseFloat(discountAdmission || 0) || 0;
+    if (discountAnnual !== undefined) updateData.discountAnnual = parseFloat(discountAnnual || 0) || 0;
+    if (discountExam !== undefined) updateData.discountExam = parseFloat(discountExam || 0) || 0;
+    if (discountComputer !== undefined) updateData.discountComputer = parseFloat(discountComputer || 0) || 0;
+
+    const updatedStudent = await prisma.$transaction(async (tx) => {
+      const student = await tx.student.update({
+        where: { id: studentId },
+        data: updateData,
+        include: {
+          studentclass: true,
+          session: true
+        }
+      });
+
+      // Synchronize all PENDING monthly structures if any discount/class/station has been updated
+      if (
+        discountTuition !== undefined ||
+        discountBus !== undefined ||
+        discountAdmission !== undefined ||
+        discountAnnual !== undefined ||
+        discountExam !== undefined ||
+        discountComputer !== undefined ||
+        station !== undefined ||
+        className !== undefined
+      ) {
+        await syncPendingFeeStructures(studentId, tx);
       }
+
+      return student;
     });
 
     return res.status(200).json({
@@ -890,6 +1212,7 @@ const promoteStudent = async (req, res) => {
       const nextSessionStartDate = new Date(startYear, 3, 1); // April
 
       // Create new Student record
+      // Create new Student record
       const promotedStudent = await tx.student.create({
         data: {
           name: student.name,
@@ -901,7 +1224,13 @@ const promoteStudent = async (req, res) => {
           contactNo: student.contactNo,
           station: student.station || null,
           classId: targetClass.id,
-          sessionId: targetSession.id
+          sessionId: targetSession.id,
+          discountTuition: student.discountTuition,
+          discountBus: student.discountBus,
+          discountAdmission: student.discountAdmission,
+          discountAnnual: student.discountAnnual,
+          discountExam: student.discountExam,
+          discountComputer: student.discountComputer
         }
       });
 
@@ -921,24 +1250,33 @@ const promoteStudent = async (req, res) => {
 
       let isFirstMonth = true;
 
+      // Parse student-specific discounts (from current student details)
+      const tuitionDiscount = parseFloat(student.discountTuition || 0) || 0;
+      const busDiscount = parseFloat(student.discountBus || 0) || 0;
+      const admissionDiscount = parseFloat(student.discountAdmission || 0) || 0;
+      const annualDiscount = parseFloat(student.discountAnnual || 0) || 0;
+      const examDiscount = parseFloat(student.discountExam || 0) || 0;
+      const computerDiscount = parseFloat(student.discountComputer || 0) || 0;
+
       for (let d = new Date(currentLoopDate); d <= loopLimit; d.setMonth(d.getMonth() + 1)) {
         const monthStr = formatMonthYear(d);
         const monthName = monthNames[d.getMonth()];
         const monthlyFeeConfig = monthlyFees.find(f => f.monthName === monthName);
 
-        const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0;
-        const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0;
-        const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0;
+        const tuitionFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(targetClass.tuitionFee) || 0) - tuitionDiscount);
+        const examFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(targetClass.examFee) || 0) - examDiscount);
+        const computerFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(targetClass.computerFee) || 0) - computerDiscount);
         const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(targetClass.tieBeltBooks) || 0;
         const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(targetClass.ptmFine) || 0;
         const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(targetClass.buildingFund) || 0;
-        const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0;
+        const annualCharges = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(targetClass.annualCharges) || 0) - annualDiscount);
+        const schoolBusCharges = Math.max(0, busCharges - busDiscount);
 
         const currentAdmissionFee = 0;
         const currentPreviousSessionDues = isFirstMonth ? totalDues : 0;
         isFirstMonth = false;
 
-        const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges + currentPreviousSessionDues;
+        const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + schoolBusCharges + currentPreviousSessionDues;
 
         await tx.feeStructure.create({
           data: {
@@ -953,7 +1291,7 @@ const promoteStudent = async (req, res) => {
             ptmFine,
             buildingFund,
             annualCharges,
-            schoolBusCharges: busCharges,
+            schoolBusCharges,
             previousSessionDues: currentPreviousSessionDues,
             total: totalDemand,
             status: "PENDING"
@@ -1012,11 +1350,44 @@ const deleteStudent = async (req, res) => {
   }
 };
 
+const getNextRollNo = async (req, res) => {
+  try {
+    const { className, sessionYear } = req.query;
+    if (!className || !sessionYear) {
+      return res.status(400).json({ success: false, message: "Missing className or sessionYear parameter" });
+    }
+
+    let formattedSessionYear = sessionYear;
+    if (sessionYear && sessionYear.includes("-")) {
+      const parts = sessionYear.split("-");
+      if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 4) {
+        formattedSessionYear = `${parts[0]}-${parts[1].substring(2)}`;
+      }
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { year: formattedSessionYear }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: "Session not found" });
+    }
+
+    const nextRollNo = await generateNextRollNo(className, session.id);
+    return res.status(200).json({ success: true, nextRollNo });
+  } catch (error) {
+    console.error("Error in getNextRollNo:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
+  }
+};
+
 export { 
   addStudent, 
   getStudents, 
   getStudentFees, 
-  getFeeStats, 
+  getFeeStats,
+  getIncomeAnalysis,
+  getNextRollNo,
   updateStudentFeeStructure, 
   updateStudent, deleteStudent, 
   promoteStudent 

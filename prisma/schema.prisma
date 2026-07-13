@@ -188,6 +188,12 @@ model Student {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   sessionId       String
+  discountTuition     Decimal   @default(0) @db.Decimal(10, 2)
+  discountBus         Decimal   @default(0) @db.Decimal(10, 2)
+  discountAdmission   Decimal   @default(0) @db.Decimal(10, 2)
+  discountAnnual      Decimal   @default(0) @db.Decimal(10, 2)
+  discountExam        Decimal   @default(0) @db.Decimal(10, 2)
+  discountComputer    Decimal   @default(0) @db.Decimal(10, 2)
   feeStructures   FeeStructure[]
   studentclass    Class          @relation(fields: [classId], references: [id])
   session         Session        @relation(fields: [sessionId], references: [id])

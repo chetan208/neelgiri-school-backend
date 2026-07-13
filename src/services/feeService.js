@@ -32,27 +32,35 @@ export const ensureStudentFeeForMonth = async (student, monthStr, startDate) => 
     }
   });
 
-  const tuitionFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(student.studentclass.tuitionFee) || 0;
-  const examFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(student.studentclass.examFee) || 0;
-  const computerFee = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(student.studentclass.computerFee) || 0;
-  const admissionFeeConfig = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(student.studentclass.admissionFee) || 0;
+  const tuitionDiscount = parseFloat(student.discountTuition || 0) || 0;
+  const busDiscount = parseFloat(student.discountBus || 0) || 0;
+  const admissionDiscount = parseFloat(student.discountAdmission || 0) || 0;
+  const annualDiscount = parseFloat(student.discountAnnual || 0) || 0;
+  const examDiscount = parseFloat(student.discountExam || 0) || 0;
+  const computerDiscount = parseFloat(student.discountComputer || 0) || 0;
+
+  const tuitionFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tuitionFee) : 0) || parseFloat(student.studentclass.tuitionFee) || 0) - tuitionDiscount);
+  const examFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.examFee) : 0) || parseFloat(student.studentclass.examFee) || 0) - examDiscount);
+  const computerFee = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.computerFee) : 0) || parseFloat(student.studentclass.computerFee) || 0) - computerDiscount);
+  const admissionFeeConfig = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.admissionFee) : 0) || parseFloat(student.studentclass.admissionFee) || 0) - admissionDiscount);
   const tieBeltBooks = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.tieBeltBooks) : 0) || parseFloat(student.studentclass.tieBeltBooks) || 0;
   const ptmFine = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.ptmFine) : 0) || parseFloat(student.studentclass.ptmFine) || 0;
   const buildingFund = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.buildingFund) : 0) || parseFloat(student.studentclass.buildingFund) || 0;
-  const annualCharges = (monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(student.studentclass.annualCharges) || 0;
+  const annualCharges = Math.max(0, ((monthlyFeeConfig ? parseFloat(monthlyFeeConfig.annualCharges) : 0) || parseFloat(student.studentclass.annualCharges) || 0) - annualDiscount);
 
   let busCharges = 0;
   if (student.station) {
     const transport = await prisma.transportFee.findUnique({ where: { station: student.station } });
     if (transport) busCharges = parseFloat(transport.amount);
   }
+  const schoolBusCharges = Math.max(0, busCharges - busDiscount);
 
   const feeMonthDate = new Date(`${mName} 1, ${year}`);
   const isAdmissionMonth = feeMonthDate.getMonth() === startDate.getMonth() && 
                            feeMonthDate.getFullYear() === startDate.getFullYear();
   const currentAdmissionFee = isAdmissionMonth ? admissionFeeConfig : 0;
 
-  const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + busCharges;
+  const totalDemand = currentAdmissionFee + tuitionFee + examFee + computerFee + tieBeltBooks + ptmFine + buildingFund + annualCharges + schoolBusCharges;
 
   const newFee = await prisma.feeStructure.create({
     data: {
@@ -67,7 +75,7 @@ export const ensureStudentFeeForMonth = async (student, monthStr, startDate) => 
       ptmFine,
       buildingFund,
       annualCharges,
-      schoolBusCharges: busCharges,
+      schoolBusCharges,
       total: totalDemand,
       status: "PENDING"
     },
