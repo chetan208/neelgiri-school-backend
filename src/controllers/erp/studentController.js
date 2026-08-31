@@ -1,7 +1,7 @@
-import fs from "fs";
 import { ensureStudentFeeForMonth } from "../../services/feeService.js";
 import { prisma } from "../../../lib/prisma.ts";
-import { sendWhatsAppMessage } from "../../services/whatsappService.js";
+// WhatsApp integration disabled for now
+// import { sendWhatsAppMessage } from "../../services/whatsappService.js";
 
 const formatMonthYear = (date) => {
   const monthNames = [
@@ -374,10 +374,10 @@ Billing Summary (From Admission to Current Date):
 
 Thank you for choosing Neelgiri School!`;
 
-      // Non-blocking background call
-      sendWhatsAppMessage(contactNo, message).catch(err => {
-        console.error("Failed to send admission WhatsApp message:", err);
-      });
+      // WhatsApp integration disabled for now
+      // sendWhatsAppMessage(contactNo, message).catch(err => {
+      //   console.error("Failed to send admission WhatsApp message:", err);
+      // });
     }
 
     return res.status(201).json({
@@ -799,6 +799,25 @@ const getIncomeAnalysis = async (req, res) => {
       }
       return getMonthIndex(a.month) - getMonthIndex(b.month);
     });
+
+    // Calculate cumulative demand: current month fee + all previous months' pending
+    let carryForwardPending = 0;
+    const classCarryForward = {}; // Track per-class carry forward
+    for (const mData of formattedData) {
+      mData.monthDemand = mData.totalDemand; // Pure current month fee only
+      mData.cumulativeDemand = Math.round((mData.totalDemand + carryForwardPending) * 100) / 100;
+      
+      // Class-wise cumulative
+      for (const cls of mData.classes) {
+        const prevPending = classCarryForward[cls.className] || 0;
+        cls.monthDemand = cls.demand; // Pure current month
+        cls.cumulativeDemand = Math.round((cls.demand + prevPending) * 100) / 100;
+        // Update carry forward for this class
+        classCarryForward[cls.className] = Math.round((prevPending + cls.pending) * 100) / 100;
+      }
+
+      carryForwardPending = Math.round((carryForwardPending + mData.totalPending) * 100) / 100;
+    }
 
     return res.status(200).json({
       success: true,

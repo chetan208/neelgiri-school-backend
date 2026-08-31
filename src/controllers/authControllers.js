@@ -4,7 +4,8 @@ import jwt from "jsonwebtoken";
 import { sendOtpEmail } from "../services/emailService.js";
 import generateToken from "../services/generateToken.js";
 
-import { sendWhatsAppMessage, getWhatsAppStatus, logoutWhatsApp } from "../services/whatsappService.js";
+// WhatsApp integration disabled for now
+// import { sendWhatsAppMessage, getWhatsAppStatus, logoutWhatsApp } from "../services/whatsappService.js";
 
 
 
@@ -198,57 +199,21 @@ const logout = async(req,res)=>{
 
 // Example Usage inside your route/controller
 const notifyParent = async (req, res) => {
-    const msg = `Dear Parent, Anuj has been successfully registered at Neelgiri School.`;
-    
-    const number ='+91 98051 69647'; // Parent's mobile number with country code    
-
-    try {
-        const result = await sendWhatsAppMessage(number, msg);
-        
-        if (result.success) {
-            console.log("Notification sent!");
-            return res.status(200).json({ success: true, message: "Notification sent successfully." });
-        } else {
-            console.log("Notification failed:", result.error);
-            return res.status(500).json({ success: false, error: result.error });
-        }
-    } catch (error) {
-        console.error("Error in notifyParent test route:", error);
-        return res.status(500).json({ success: false, error: error.message });
-    }
+    return res.status(200).json({ success: false, message: "WhatsApp integration disabled." });
 };
 
 const getWhatsappStatusEndpoint = async (req, res) => {
-    try {
-        const status = getWhatsAppStatus();
-        return res.status(200).json({
-            success: true,
-            status
-        });
-    } catch (error) {
-        console.error("Error in getWhatsappStatusEndpoint:", error);
-        return res.status(500).json({ success: false, error: error.message });
-    }
+    return res.status(200).json({
+        success: true,
+        status: { isConnected: false, qrCode: null, info: null }
+    });
 };
 
 const logoutWhatsappEndpoint = async (req, res) => {
-    try {
-        const result = await logoutWhatsApp();
-        if (result.success) {
-            return res.status(200).json({
-                success: true,
-                message: "WhatsApp session logged out successfully."
-            });
-        } else {
-            return res.status(500).json({
-                success: false,
-                error: result.error
-            });
-        }
-    } catch (error) {
-        console.error("Error in logoutWhatsappEndpoint:", error);
-        return res.status(500).json({ success: false, error: error.message });
-    }
+    return res.status(200).json({
+        success: true,
+        message: "WhatsApp session logged out successfully."
+    });
 };
 
 export { TeacherLogin, 

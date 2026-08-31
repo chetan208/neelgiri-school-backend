@@ -1,5 +1,6 @@
 import { prisma } from "../../../lib/prisma.ts";
-import { sendWhatsAppMessage } from "../../services/whatsappService.js";
+// WhatsApp integration disabled for now
+// import { sendWhatsAppMessage } from "../../services/whatsappService.js";
 
 const makePayment = async (req, res) => {
   try {
@@ -191,18 +192,18 @@ const makePayment = async (req, res) => {
         
         whatsappMsg += `Thank you,\nNeelgiri School Administration`;
 
-        // Send the WhatsApp message asynchronously
-        sendWhatsAppMessage(student.contactNo, whatsappMsg)
-          .then(result => {
-            if (result.success) {
-              console.log(`WhatsApp fee payment notification successfully sent to ${student.contactNo}`);
-            } else {
-              console.error(`WhatsApp fee payment notification failed for ${student.contactNo}:`, result.error);
-            }
-          })
-          .catch(err => {
-            console.error("Error sending WhatsApp notification:", err);
-          });
+        // WhatsApp integration disabled for now
+        // sendWhatsAppMessage(student.contactNo, whatsappMsg)
+        //   .then(result => {
+        //     if (result.success) {
+        //       console.log(`WhatsApp fee payment notification successfully sent to ${student.contactNo}`);
+        //     } else {
+        //       console.error(`WhatsApp fee payment notification failed for ${student.contactNo}:`, result.error);
+        //     }
+        //   })
+        //   .catch(err => {
+        //     console.error("Error sending WhatsApp notification:", err);
+        //   });
       }
     } catch (whatsappError) {
       console.error("Error processing WhatsApp fee notification:", whatsappError);

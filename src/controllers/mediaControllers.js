@@ -1,6 +1,5 @@
 import { prisma } from "../../lib/prisma.ts";
 import cloudinary, { cloud1Config, cloud2Config } from "../../config/cloudinaryImage.js";
-import { NullTypes } from "@prisma/client/runtime/client";
 
 // Global boolean for round-robin
 let useFirstImageCloud = true;

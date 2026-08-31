@@ -1,7 +1,6 @@
 import {prisma} from '../../lib/prisma.ts'
 import bcrypt from 'bcryptjs';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
-import jwt from "jsonwebtoken";
 import cloudinary, { cloud1Config, cloud2Config } from '../../config/cloudinaryImage.js'
 import generateToken from '../services/generateToken.js';
 

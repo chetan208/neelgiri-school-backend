@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma.ts";
+import { reviseClassFeeStructures } from "../../services/feeService.js";
 
 const createOrUpdateClassWithFees = async (req, res) => {
     try {
@@ -144,6 +145,11 @@ const saveClassMonthlyFee = async (req, res) => {
                 buildingFund: parseFloat(buildingFund ?? 0),
                 annualCharges: parseFloat(annualCharges ?? 0)
             }
+        });
+
+        // Trigger revision of existing fee structures for students in this class for the given month
+        await reviseClassFeeStructures(className, monthName).catch(err => {
+            console.error("Error revising fee structures:", err);
         });
 
         return res.status(200).json({

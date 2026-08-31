@@ -189,8 +189,8 @@ export const initWhatsApp = async () => {
     }
 };
 
-// Auto-start connection process
-initWhatsApp();
+// Auto-start connection process disabled for now
+// initWhatsApp();
 
 /**
  * Get current WhatsApp status, QR code, and logged-in user details

@@ -103,7 +103,7 @@ router.post("/trigger", checkOwnerMiddleware, async (req, res) => {
     (async () => {
       try {
         console.log("=== Manually Triggered Fee Automation Starting ===");
-        await runFeeAutomation(true); // ignoreWindow = true
+        await runFeeAutomation();
       } catch (err) {
         console.error("Error running manual fee automation:", err);
       } finally {
